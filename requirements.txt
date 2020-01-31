@@ -1,0 +1,3 @@
+numba
+tensorflow_datasets
+git+git://github.com/jackd/events-tfds
