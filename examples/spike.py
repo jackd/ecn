@@ -2,13 +2,14 @@ import numpy as np
 import tensorflow as tf
 from ecn.np_utils.spike import spike_threshold, global_spike_threshold
 from events_tfds.events.nmnist import NMNIST
-from events_tfds.events.utils import as_frames
-import events_tfds.events.anim as anim
+from events_tfds.vis.image import as_frames
+import events_tfds.vis.anim as anim
 
 decay_time = 10000
 
 dataset = NMNIST().as_dataset(split='train', as_supervised=True)
 frame_kwargs = dict(num_frames=20)
+stride = 3
 
 for events, label in dataset:
     coords = events['coords']
@@ -19,7 +20,7 @@ for events, label in dataset:
     img_data = [as_frames(coords, time, polarity, **frame_kwargs)]
     sizes = [time.size]
     for _ in range(3):
-        coords //= 2
+        coords //= stride
 
         time, coords, out_events = spike_threshold(time, coords, decay_time,
                                                    coords.shape[0])
