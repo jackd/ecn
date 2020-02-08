@@ -36,17 +36,21 @@ def global_spike_threshold_prealloc(times: IntArray,
 
 
 @nb.njit()
-def global_spike_threshold(times: IntArray,
-                           max_out_events: int,
-                           decay_time: int,
-                           threshold: float = 2.,
-                           reset_potential: float = -1.):
+def global_spike_threshold(
+        times: IntArray,
+        decay_time: int,
+        threshold: float = 2.,
+        reset_potential: float = -1.,
+        max_out_events: Optional[int] = None,
+):
     """
 
     Returns:
         out_times: [max_out_events] int array
         out_events: int
     """
+    if max_out_events is None:
+        max_out_events = times.size
     out_times = np.empty((max_out_events,), dtype=np.int64)
     out_events = global_spike_threshold_prealloc(
         times=times,
@@ -114,14 +118,15 @@ def spike_threshold_prealloc(
 
 
 @nb.njit()
-def spike_threshold(times: IntArray,
-                    coords: IntArray,
-                    decay_time: int,
-                    max_out_events: int,
-                    shape: Optional[Union[IntArray, Tuple[int, int]]] = None,
-                    threshold: float = 2.,
-                    reset_potential: float = -1.
-                   ) -> Tuple[IntArray, IntArray, int]:
+def spike_threshold(
+        times: IntArray,
+        coords: IntArray,
+        decay_time: int,
+        threshold: float = 2.,
+        reset_potential: float = -1.,
+        shape: Optional[Union[IntArray, Tuple[int, int]]] = None,
+        max_out_events: Optional[int] = None,
+) -> Tuple[IntArray, IntArray, int]:
     """
     Get event outputs.
 
@@ -146,6 +151,8 @@ def spike_threshold(times: IntArray,
         max_y = np.max(coords[:, 1]) + 1
     else:
         max_y, max_x = shape
+    if max_out_events is None:
+        max_out_events = times.size
 
     potentials = np.zeros((max_y, max_x), dtype=np.float32)
     potential_times = np.zeros((max_y, max_x), dtype=np.int64)

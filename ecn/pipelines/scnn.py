@@ -1,8 +1,8 @@
+import numpy as np
 import tensorflow as tf
 from ecn.pipelines.core import CustomPipeline
 import ecn.ops.spike as spike_ops
 import ecn.ops.neighbors as neigh_ops
-import ecn.ops.conv as conv_ops
 
 
 def scnn_pipeline(batch_size: int, filters=(8, 16, 32), **kwargs):
@@ -13,58 +13,41 @@ def scnn_pipeline(batch_size: int, filters=(8, 16, 32), **kwargs):
         coords = events['coords']
         coords = coords - tf.reduce_min(coords, axis=0)
         polarity = events['polarity']
-        out = dict(coords=coords, times=times)
+        out = dict(coords=coords, times=times, polarity=polarity)
         in_size = events['num_events'] if 'num_events' in events else tf.size(
             times, out_type=tf.int64)
         del events
 
         decay_time = 10000
         stride = 2
-        event_duration = 10000
+        # event_duration = 10000
+        event_duration = np.iinfo(np.int64).max - 2  # effectively inf
         spatial_buffer_size = 8
-        max_out_events = 2048
         threshold = 2.
         reset_potential = 1.
         max_neighbors = 2048
 
         all_layer_kwargs = []
         # first layer - use unlearned conv
-        out_times, out_coords, out_size = spike_ops.spike_threshold(
-            times, coords // stride, in_size, decay_time, max_out_events,
-            threshold, reset_potential)
-        event_polarities = conv_ops.unlearned_polarity_event_conv(
-            polarity,
-            times,
-            coords,
-            in_size,
-            out_times,
-            out_coords,
-            out_size,
-            decay_time=decay_time,
-            stride=stride)
+        out_times, out_coords = spike_ops.spike_threshold(
+            times, coords // stride, decay_time, threshold, reset_potential)
 
-        all_layer_kwargs.append(
-            dict(out_times=out_times,
-                 out_coords=out_coords,
-                 out_size=out_size,
-                 event_polarities=event_polarities))
-
-        times = out_times
-        coords = out_coords
-        in_size = out_size
-        decay_time *= 2
-        event_duration *= 2
-        max_out_events //= 4
-        max_neighbors //= 2
-        spatial_buffer_size *= 2
-
-        for _ in range(1, num_layers):
-            out_times, out_coords, out_size = spike_ops.spike_threshold(
-                times, coords // stride, in_size, decay_time, max_out_events,
-                threshold, reset_potential)
+        for _ in range(num_layers):
+            out_times, out_coords = spike_ops.spike_threshold(
+                times,
+                coords // stride,
+                decay_time=decay_time,
+                threshold=threshold,
+                reset_potential=reset_potential)
             indices, splits = neigh_ops.compute_neighbors(
-                times, coords, in_size, out_times, out_coords, out_size, stride,
-                event_duration, spatial_buffer_size, max_neighbors)
+                times,
+                coords,
+                out_times=out_times,
+                out_coords=out_coords,
+                stride=stride,
+                event_duration=event_duration,
+                spatial_buffer_size=spatial_buffer_size,
+                max_neighbors=max_neighbors)
             all_layer_kwargs.append(
                 dict(out_times=out_times,
                      out_coords=out_coords,
@@ -76,7 +59,6 @@ def scnn_pipeline(batch_size: int, filters=(8, 16, 32), **kwargs):
             coords = out_coords
             in_size = out_size
             decay_time *= 2
-            event_duration *= 2
             max_out_events //= 4
             max_neighbors //= 2
             spatial_buffer_size *= 2

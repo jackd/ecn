@@ -75,12 +75,11 @@ for events, label in dataset:
                                                         coords.shape[0])
     out_times = out_times[:out_events]
     out_coords = out_coords[:out_events]
-    index_values, index_lengths, _ = compute_neighbors(
+    index_values, index_lengths = compute_neighbors(
         time,
         coords,
         out_times,
         out_coords,
-        stride,
         event_duration,
         spatial_buffer_size=10,
         max_neighbors=10 * out_events,
