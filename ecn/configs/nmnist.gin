@@ -1,0 +1,38 @@
+import kblocks.extras.callbacks.checkpoint
+import ecn.models.simple
+import ecn.problems.nmnist
+import ecn.pipelines.scnn
+import kblocks.keras.optimizers
+import kblocks.path
+
+model_dir = @kb.path.model_dir()
+kb.path.model_dir.root_dir = '~/ecn'
+kb.path.model_dir.problem_id = 'nmnist'
+kb.path.model_dir.model_id = 'simple'
+kb.path.model_dir.variant_id = 'base'
+
+problem = @ecn.problems.nmnist()
+ecn.problems.nmnist.pipeline = %pipeline
+model_fn = @ecn.models.simple_ecn
+
+pipeline = @scnn_pipeline()
+scnn_pipeline.batch_size = %batch_size
+scnn_pipeline.num_layers = %num_layers
+
+ecn.models.simple_ecn.final_only = %final_only
+ecn.pipelines.scnn_pipeline.final_only = %final_only
+
+optimizer_fn = @tf.keras.optimizers.Adam
+
+TfConfig.jit = True
+
+kb.callbacks.CheckpointCallback.save_freq = 5
+validation_freq = 5
+epochs = 100
+batch_size = 64
+num_layers = 3
+final_only = True
+
+# HACK
+# TfdsProblem.examples_per_epoch = 128
+CustomPipeline.cache_path = '/tmp/nmnist-simple'

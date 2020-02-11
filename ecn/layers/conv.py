@@ -1,5 +1,7 @@
+from typing import Callable, Optional
 import tensorflow as tf
 import abc
+import gin
 from ecn.ops import conv as conv_ops
 
 FloatTensor = tf.Tensor
@@ -12,7 +14,8 @@ constraints = tf.keras.constraints
 activations = tf.keras.activations
 
 
-class ConvBase(layers.Layer):
+@gin.configurable(module='ecn.layers')
+class EventConvBase(layers.Layer):
 
     def __init__(self,
                  filters: int,
@@ -31,7 +34,7 @@ class ConvBase(layers.Layer):
                  kernel_constraint=None,
                  bias_constraint=None,
                  **kwargs):
-        super(ConvBase, self).__init__(
+        super(EventConvBase, self).__init__(
             activity_regularizer=regularizers.get(activity_regularizer),
             **kwargs)
         if is_complex:
@@ -40,7 +43,11 @@ class ConvBase(layers.Layer):
         self.temporal_kernel_size = temporal_kernel_size
         self.is_complex = is_complex
         self.use_bias = use_bias
-        self.activation = activations.get(activation)
+        self.activation: Optional[Callable] = activations.get(activation)
+        if self.activation is not None:
+            if not callable(self.activation):
+                raise ValueError('activation {} is not callable'.format(
+                    self.activation))
 
         self.decay_initializer = initializers.get(decay_initializer)
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -89,7 +96,7 @@ class ConvBase(layers.Layer):
             'bias_constraint':
                 constraints.serialize(self.bias_constraint)
         }
-        base_config = super(ConvBase, self).get_config()
+        base_config = super(EventConvBase, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
     @abc.abstractmethod
@@ -100,11 +107,15 @@ class ConvBase(layers.Layer):
     def _kernel_shape(self, input_shape):
         raise NotImplementedError
 
+    @abc.abstractmethod
+    def _decay_shape(self, input_shape):
+        raise NotImplementedError
+
     def _finalize(self, outputs):
         if self.use_bias:
             outputs = tf.nn.bias_add(outputs, self.bias)
         if self.activation is not None:
-            return self.activation(outputs)  # pylint: disable=not-callable
+            return self.activation(outputs)
         return outputs
 
     def build(self, input_shape):
@@ -112,7 +123,7 @@ class ConvBase(layers.Layer):
             return
 
         self.decay = self.add_weight('decay',
-                                     shape=(self.temporal_kernel_size,),
+                                     shape=self._decay_shape(input_shape),
                                      initializer=self.decay_initializer,
                                      regularizer=self.decay_regularizer,
                                      constraint=self.decay_constraint)
@@ -133,57 +144,132 @@ class ConvBase(layers.Layer):
                                         trainable=True)
         else:
             self.bias = None
-        super(ConvBase, self).build(input_shape)
+        super(EventConvBase, self).build(input_shape)
 
 
-class EventConv(ConvBase):
+def _spatial_size(input_shape) -> int:
+    if len(input_shape) == 2:
+        return input_shape[1][-1]
+    else:
+        return len(input_shape) - 1
+
+
+@gin.configurable(module='ecn.layers')
+class SpatialEventConv(EventConvBase):
+
+    def __init__(self,
+                 filters: int,
+                 temporal_kernel_size: int,
+                 spatial_kernel_size: Optional[int] = None,
+                 **kwargs):
+        self.spatial_kernel_size = spatial_kernel_size
+        super(SpatialEventConv, self).__init__(filters, temporal_kernel_size,
+                                               **kwargs)
+
+    def _validate_kernel_size(self, input_shape):
+        if len(input_shape) == 2:
+            sk = input_shape[1][-1]
+        else:
+            sk = len(input_shape) - 1
+        if sk is None:
+            if self.spatial_kernel_size is None:
+                raise ValueError(
+                    'spatial_kernel_size not defined in constructor and not '
+                    'inferable from static input sizes.')
+        elif self.spatial_kernel_size is None:
+            self.spatial_kernel_size = sk
+        elif self.spatial_kernel_size != sk:
+            raise ValueError(
+                'spatial_kernel_size {} is not consistent with that inferred '
+                'from input static shapes, {}'.format(self.spatial_kernel_size,
+                                                      sk))
+        assert (self.spatial_kernel_size is not None)
+        assert (isinstance(self.spatial_kernel_size, int))
 
     def _kernel_shape(self, input_shape):
         filters_in = input_shape[0][-1]
-        k = input_shape[3][0]
-        return (k, self.termporal_kernel_size, filters_in, self.filters)
+        self._validate_kernel_size(input_shape)
+        # _spatial_size(input_shape)
+        return (self.spatial_kernel_size, self.temporal_kernel_size, filters_in,
+                self.filters)
+
+    def _decay_shape(self, input_shape):
+        self._validate_kernel_size(input_shape)
+        return (self.spatial_kernel_size, self.temporal_kernel_size)
+
+    def get_config(self):
+        config = super(SpatialEventConv, self).get_config()
+        config['spatial_kernel_size'] = self.spatial_kernel_size
+        return config
 
     def call(self, inputs):
-        in_features, in_times, out_times, sparse_indices = inputs
-        features = conv_ops.event_conv(
-            in_features=in_features,
-            in_times=in_times,
-            out_times=out_times,
-            sparse_indices=sparse_indices,
+        features, *dt = inputs
+        if len(dt) == 1:
+            dt, = dt
+        features = conv_ops.spatial_event_conv(
+            features=features,
+            dt=dt,
             kernel=self.kernel,
             decay=self.decay,
         )
         return self._finalize(features)
 
 
-class GlobalEventConv(ConvBase):
+@gin.configurable(module='ecn.layers')
+class GlobalEventConv(EventConvBase):
 
     def _kernel_shape(self, input_shape):
         filters_in = input_shape[0][-1]
         return (self.temporal_kernel_size, filters_in, self.filters)
 
+    def _decay_shape(self, input_shape):
+        return (self.temporal_kernel_size,)
+
     def call(self, inputs):
-        in_features, in_times, out_times, sparse_indices = inputs
+        features, dt = inputs
         features = conv_ops.global_event_conv(
-            in_features=in_features,
-            in_times=in_times,
-            out_times=out_times,
-            sparse_indices=sparse_indices,
+            features=features,
+            dt=dt,
             kernel=self.kernel,
             decay=self.decay,
         )
         return self._finalize(features)
 
 
-def event_conv(in_features: FloatTensor, in_times: FloatTensor,
-               out_times: FloatTensor, sparse_indices: IntTensor, filters: int,
-               decay_time: float, **kwargs):
-    return EventConv(filters=filters, decay_time=decay_time, **kwargs)(
-        [in_features, in_times, out_times, sparse_indices])
+def spatial_event_conv(features: FloatTensor, dt: tf.SparseTensor, filters: int,
+                       temporal_kernel_size: int, **kwargs):
+    return SpatialEventConv(filters=filters,
+                            temporal_kernel_size=temporal_kernel_size,
+                            **kwargs)([features, dt])
 
 
-def global_event_conv(in_features: FloatTensor, in_times: FloatTensor,
-                      out_times: FloatTensor, sparse_indices: IntTensor,
-                      filters: int, decay_time: float, **kwargs):
-    return GlobalEventConv(filters=filters, decay_time=decay_time, **kwargs)(
-        [in_features, in_times, out_times, sparse_indices])
+def global_event_conv(features: FloatTensor, dt: tf.SparseTensor, filters: int,
+                      temporal_kernel_size: int, **kwargs):
+    return GlobalEventConv(filters=filters,
+                           temporal_kernel_size=temporal_kernel_size,
+                           **kwargs)([features, dt])
+
+
+if __name__ == '__main__':
+    f_in = 7
+    n_in = 11
+    n_out = 5
+    n_e = 23
+    sk = 3
+    i = tf.random.uniform((n_e,), minval=0, maxval=n_out, dtype=tf.int64)
+    j = tf.random.uniform((n_e,), minval=0, maxval=n_in, dtype=tf.int64)
+    d = tf.random.uniform((n_e,), minval=0, maxval=sk, dtype=tf.int64)
+    dij = tf.stack((d, i, j), axis=-1)
+    neigh = tf.SparseTensor(dij, tf.random.uniform((n_e,), dtype=tf.float32),
+                            (sk, n_out, n_in))
+    layer = SpatialEventConv(2, 3, 4)
+    features = tf.random.normal((n_in, f_in))
+    layer([features, neigh])
+    print('SpatialEventConv successfully built')
+
+    layer = GlobalEventConv(2, 3)
+    ij = tf.stack((i, j), axis=-1)
+    neigh = tf.SparseTensor(ij, tf.random.uniform((n_e,), dtype=tf.float32),
+                            (n_out, n_in))
+    layer([features, neigh])
+    print('GlobalEventConv successfully built')

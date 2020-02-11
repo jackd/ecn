@@ -1,21 +1,52 @@
 import tensorflow as tf
 from kblocks.framework.problems.tfds import TfdsProblem
 from events_tfds.events.nmnist import NMNIST
+from events_tfds.events.nmnist import NUM_CLASSES
 
 import gin
 
 
-@gin.configurable(module='ecn')
+@gin.configurable(module='ecn.problems')
 def nmnist(pipeline):
     return TfdsProblem(
         NMNIST(),
         split_map={'validation': 'test'},
         pipeline=pipeline,
         loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        metrics=(tf.keras.metrics.SparseCategoricalAccuracy(),))
+        metrics=(tf.keras.metrics.SparseCategoricalAccuracy(),),
+        outputs_spec=(tf.TensorSpec(shape=(None, NUM_CLASSES),
+                                    dtype=tf.float32))
+        # loss=(
+        #     tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        #     None,  # final
+        # ),
+        # metrics=(
+        #     (tf.keras.metrics.SparseCategoricalAccuracy(name='stream_acc'),),
+        #     (tf.keras.metrics.SparseCategoricalAccuracy(name='final_acc'),),
+        # ),
+        # outputs_spec=(tf.TensorSpec(shape=(None, NUM_CLASSES),
+        #                             dtype=tf.float32),) * 2
+
+        # loss={
+        #     'stream':
+        #         tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        #     'final':
+        #         None
+        # },
+        # metrics={
+        #     'stream': (tf.keras.metrics.SparseCategoricalAccuracy(),),
+        #     'final': (tf.keras.metrics.SparseCategoricalAccuracy(),),
+        # },
+        # outputs_spec={
+        #     'stream':
+        #         tf.TensorSpec(shape=(None, NUM_CLASSES), dtype=tf.float32),
+        #     'final':
+        #         tf.TensorSpec(shape=(None, NUM_CLASSES), dtype=tf.float32),
+        # }
+    )
 
 
-@gin.configurable(module='ecn')
+@gin.configurable(module='ecn.problems')
 def vis_nmnist_example(features, labels, weights=None):
     import numpy as np
     from events_tfds.vis.image import as_frames

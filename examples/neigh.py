@@ -70,11 +70,8 @@ for events, label in dataset:
 
     coords = (coords - tf.reduce_min(coords, axis=0)).numpy()
     time = (time - tf.reduce_min(time)).numpy()
-    out_times, out_coords, out_events = spike_threshold(time, coords // stride,
-                                                        decay_time,
-                                                        coords.shape[0])
-    out_times = out_times[:out_events]
-    out_coords = out_coords[:out_events]
+    out_times, out_coords = spike_threshold(time, coords // stride, decay_time,
+                                            coords.shape[0])
     index_values, index_lengths = compute_neighbors(
         time,
         coords,
@@ -82,7 +79,6 @@ for events, label in dataset:
         out_coords,
         event_duration,
         spatial_buffer_size=10,
-        max_neighbors=10 * out_events,
     )
     vis(time, coords, polarity, out_times, out_coords, index_values,
         index_lengths)

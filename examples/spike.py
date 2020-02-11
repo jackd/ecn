@@ -22,11 +22,10 @@ for events, label in dataset:
     for _ in range(3):
         coords //= stride
 
-        time, coords, out_events = spike_threshold(time, coords, decay_time,
-                                                   coords.shape[0])
-        time = time[:out_events]
-        coords = coords[:out_events]
-        sizes.append(out_events)
+        time, coords = spike_threshold(time, coords, decay_time,
+                                       coords.shape[0])
+
+        sizes.append(time.size)
         img_data.append(as_frames(coords, time, **frame_kwargs))
 
     global_times, global_events = global_spike_threshold(

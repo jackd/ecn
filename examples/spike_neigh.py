@@ -1,5 +1,5 @@
-import os
-os.environ['NUMBA_DISABLE_JIT'] = '1'
+# import os
+# os.environ['NUMBA_DISABLE_JIT'] = '1'
 
 import numpy as np
 import tensorflow as tf
@@ -15,15 +15,21 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 
-def vis_adjacency(indices, split):
-    plt.figure()
-    ax = plt.gca()
+def vis_adjacency(indices, split, in_times, out_times, decay_time):
+    _, (ax0, ax1, ax2) = plt.subplots(3, 1)
     row_lengths = splits[1:] - splits[:-1]
     i = np.repeat(np.arange(row_lengths.size), row_lengths, axis=0)
     j = indices
-    sp = coo_matrix((np.ones(i.shape, dtype=np.bool), (i, j)))
-    ax.spy(sp, markersize=1)
-    # ax.imshow(sp, cmap='gray')
+    values = np.exp(-(out_times[i] - in_times[j]) / decay_time)
+    sp = coo_matrix((values, (i, j)))
+    ax0.spy(sp, markersize=1)
+    ax1.imshow(sp.todense(), cmap='gray')
+
+    mask = values > 1e-2
+    print('mean significant adjacency: {}'.format(np.mean(mask)))
+    sp = coo_matrix((values[mask], (i[mask], j[mask])))
+    ax2.spy(sp, markersize=1)
+    # ax1.spy(sp)
 
 
 def vis_graph(coords, time, out_coords, out_time, indices, splits, n=10):
@@ -64,18 +70,18 @@ stride = 2
 
 dataset = NMNIST().as_dataset(split='train', as_supervised=True)
 frame_kwargs = dict(num_frames=20)
+all_event_counts = []
 
-for events, label in dataset:
+for events, label in dataset.take(100):
     decay_time = 10000
-    event_duration = 30000000
+    event_duration = decay_time * 6
     spatial_buffer_size = 32
-    max_out_events = 2048
 
     coords = events['coords']
     time = events['time'].numpy()
     polarity = events['polarity'].numpy()
 
-    print('dt = {}'.format(np.max(time) - np.min(time)))
+    print('{} events over {} dt'.format(time.size, np.max(time) - np.min(time)))
 
     coords = (coords - tf.reduce_min(coords, axis=0)).numpy()
     img_data = [as_frames(coords, time, polarity, **frame_kwargs)]
@@ -87,16 +93,14 @@ for events, label in dataset:
         print('---LAYER {}---'.format(i))
         pooled_coords = coords // 2
 
-        out_time, out_coords, out_events = spike.spike_threshold(
+        out_time, out_coords = spike.spike_threshold(
             time,
             pooled_coords,
             decay_time=decay_time,
-            max_out_events=max_out_events,
             **spike_kwargs,
         )
-        print('events {}: {} / {}'.format(i, out_events, max_out_events))
-        out_time = out_time[:out_events]
-        out_coords = out_coords[:out_events]
+        out_events = out_time.size
+        print('events {}: {}'.format(i, out_events))
         sizes.append(out_events)
 
         indices, splits = neigh.compute_neighbors(
@@ -115,14 +119,13 @@ for events, label in dataset:
                   indices,
                   splits,
                   n=10)
-        vis_adjacency(indices, splits)
+        vis_adjacency(indices, splits, time, out_time, decay_time)
         plt.show()
 
         print('neighbors {}: {}'.format(i, indices.size))
 
         decay_time *= 2
         event_duration *= 2
-        max_out_events //= 4
         spatial_buffer_size //= 2
 
         time = out_time
@@ -130,19 +133,18 @@ for events, label in dataset:
 
         img_data.append(as_frames(coords, time, **frame_kwargs))
 
-    global_times, global_events = spike.global_spike_threshold(
+    global_times = spike.global_spike_threshold(
         time,
-        max_out_events=max_out_events,
         decay_time=decay_time,
         **spike_kwargs,
     )
 
     print('-------------')
     print('---GLOBAL----')
-    print('events: {} / {}'.format(global_events, max_out_events))
-    global_times = global_times[:global_events]
+    global_events = global_times.size
+    print('events: {}'.format(global_events))
     max_neighbors = 32
-    global_indices, global_splits, _ = neigh.compute_global_neighbors(
+    global_indices, global_splits = neigh.compute_global_neighbors(
         time,
         global_times,
         event_duration=event_duration,
@@ -154,5 +156,8 @@ for events, label in dataset:
     img_data.append(as_frames(coords, global_times, **frame_kwargs))
     sizes.append(global_events)
     print(sizes)
+    all_event_counts.append(sizes)
 
-    anim.animate_frames_multi(*img_data, fps=4)
+    # anim.animate_frames_multi(*img_data, fps=4)
+
+print(np.mean(all_event_counts, axis=0))

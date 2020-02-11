@@ -1,13 +1,17 @@
+from typing import Iterable, Union
 import tensorflow as tf
+import kblocks.ops.sparse as sparse_ops
 
 BoolTensor = tf.Tensor
 IntTensor = tf.Tensor
 FloatTensor = tf.Tensor
 
 
-def global_event_conv(in_features: FloatTensor, in_times: FloatTensor,
-                      out_times: FloatTensor, sparse_indices: IntTensor,
-                      kernel: FloatTensor, decay: FloatTensor) -> FloatTensor:
+def global_event_conv(features: FloatTensor,
+                      dt: tf.SparseTensor,
+                      kernel: FloatTensor,
+                      decay: FloatTensor,
+                      skip_dynamic_checks=False) -> FloatTensor:
     """
     Global event convolution.
 
@@ -21,34 +25,44 @@ def global_event_conv(in_features: FloatTensor, in_times: FloatTensor,
 
     Args:
         in_features: [n_in, f_in] float tensor of input event features.
-        in_times: [n_in] float tensor of input event times.
-        out_times: [n_out] float tensor of output event times.
-        sparse_indices: [E, 2] sparse indices for each kernel.
+        dt: Sparse tensor with non-negative time differences for values,
+            `dense shape` [n_out, n_in].
         kernel: [tk, f_in, f_out] kernel weights.
-        decay: [tk] decay weights in units per-time.
+        decay: [tk] non-negative decay weights in units per-time.
 
     Returns:
         [n_out, f_out] output features.
     """
-    in_features.shape.assert_has_rank(2)
-    in_times.shape.assert_has_rank(1)
-    out_times.shape.assert_has_rank(1)
-    sparse_indices.assert_has_rank(2)
-    kernel.assert_has_rank(3)
-    decay.assert_has_rank(1)
-    assert (kernel.shape[0] == kernel.shape[0])
-    assert (in_features.shape[0] == in_times.shape[0])
+    # arg checking
+    features.shape.assert_has_rank(2)
+    if not skip_dynamic_checks:
+        n_in = dt.dense_shape[-1]
+        tf.assert_equal(
+            tf.shape(features, out_type=getattr(n_in, 'dtype', tf.int64))[0],
+            n_in)
+    if dt.dense_shape.shape[0] == 3:
+        # remove batch dim
+        dt = sparse_ops.remove_dim(dt, axis=0)
 
-    dense_shape = (tf.size(out_times), tf.size(in_times))
-    out_indices, in_indices = tf.split(sparse_indices, axis=-1)
-    t_out = tf.gather(out_times, out_indices)
-    t_in = tf.gather(in_times, in_indices)
-    sparse_values = tf.exp(tf.expand_dims(decay, axis=-1) * (t_in - t_out))
+    assert (dt.dense_shape.shape[0] == 2)
+    kernel.shape.assert_has_rank(3)
+    assert (dt.dense_shape.shape[0] == 2)
+    assert (decay.shape[0] == kernel.shape[0])
+    assert (features.shape[1] == kernel.shape[1])
+    assert (dt.dtype.is_floating)
+    assert (kernel.dtype.is_floating)
+    assert (decay.dtype.is_floating)
+
+    # implementation start
+    sparse_values = dt.values
+    sparse_indices = dt.indices
+    dense_shape = dt.dense_shape
+    sparse_values = tf.exp(-tf.expand_dims(decay, axis=-1) * sparse_values)
 
     def map_fn(kernel, sparse_values):
         st = tf.SparseTensor(sparse_indices, sparse_values, dense_shape)
-        features = tf.sparse.sparse_dense_matmul(st, in_features)
-        return tf.matmul(features, kernel)
+        out_features = tf.sparse.sparse_dense_matmul(st, features)
+        return tf.matmul(out_features, kernel)
 
     kernel = tf.unstack(kernel, axis=0)
     sparse_values = tf.unstack(sparse_values, axis=0)
@@ -56,9 +70,9 @@ def global_event_conv(in_features: FloatTensor, in_times: FloatTensor,
     return features
 
 
-def event_conv(in_features: FloatTensor, in_times: FloatTensor,
-               out_times: FloatTensor, sparse_indices: IntTensor,
-               kernel: FloatTensor, decay: FloatTensor) -> FloatTensor:
+def spatial_event_conv(features: FloatTensor,
+                       dt: Union[tf.SparseTensor, Iterable[tf.SparseTensor]],
+                       kernel: FloatTensor, decay: FloatTensor) -> FloatTensor:
     """
     Event convolution.
 
@@ -69,41 +83,65 @@ def event_conv(in_features: FloatTensor, in_times: FloatTensor,
         f_out: number of output features per output event
         sk: number of spatial elements of the kernel. E.g. a 2x2 conv has k=4
         tk: number of temporal elements of the kernel.
-        E: number of edges
 
     Args:
-        in_features: [n_in, f_in] float tensor of input event features.
-        in_times: [n_in] float tensor of input event times.
-        out_times: [n_out] float tensor of output event times.
-        sparse_indices: [sk, E?, 2] sparse indices for each kernel.
+        features: [n_in, f_in] float tensor of input event features.
+        dt: rank-3 `SpareTensor` with `dense_shape` [u, n_out, n_in] and values
+            of non-negative time differences.
         kernel: [sk, tk, f_in, f_out] kernel weights.
-        decay: [tk] decay weights in units per-time.
+        decay: [sk, tk] decay weights in units per-time.
 
     Returns:
         [n_out, f_out] output features.
     """
+    decay.shape.assert_has_rank(2)
+    assert (decay.dtype.is_floating)
 
-    def map_fn(sparse_indices, kernel):
-        """
-        Args:
-            sparse_indices: [E, 2] int
-            kernel: [f_in, f_out] float
+    sk = decay.shape[0]
+    assert (sk is not None)
+    kernel.shape.assert_has_rank(4)
+    assert (kernel.shape[2] == features.shape[1])
+    assert (kernel.shape[0] == sk)
+    assert (kernel.dtype.is_floating)
 
-        Returns:
-            features: n_out, f_out
-        """
-        return global_event_conv(in_features, in_times, out_times,
-                                 sparse_indices, kernel, decay)
+    assert (kernel.shape[:2] == decay.shape)
 
-    if isinstance(sparse_indices, tf.Tensor):
-        sparse_indices = tf.unstack(sparse_indices, axis=0)
-    elif isinstance(sparse_indices, tf.RaggedTensor):
-        sparse_indices = tf.split(sparse_indices.values,
-                                  sparse_indices.row_lengths())
+    # arg checking
+    if isinstance(dt, tf.SparseTensor):
+        # assert (dt.dtype.is_floating)
+        # dt.shape.assert_has_rank(3)
+        assert (getattr(dt, 'dtype').is_floating)
+        shape = getattr(dt, 'shape')
+        if shape.ndims == 4:
+            # remove batch dim
+            dt = sparse_ops.remove_dim(dt)
+        else:
+            shape.assert_has_rank(3)  # make pyright shut up
+        dt_ = sparse_ops.unstack(dt, num_partitions=sk)
+    elif isinstance(dt, tf.Tensor):
+        raise ValueError('dense dt not supported')
+    elif hasattr(dt, '__iter__'):
+        dt_ = []
+        for d in dt:
+            assert (isinstance(d, tf.SparseTensor))
+            shape = d.shape
+            if shape.ndims == 3:
+                # remove batch dim
+                d = sparse_ops.remove_dim(d)
+            else:
+                shape.assert_has_rank(2)
+            assert (d.dtype.is_floating)
+            dt_.append(d)
     else:
-        raise ValueError(
-            'sparse_indices must be a Tensor or RaggedTensor, got {}'.format(
-                sparse_indices))
+        raise ValueError('Unrecognized dt type {}'.format(dt))
+    sk = len(dt_)
+    features.shape.assert_has_rank(2)
+
+    # implementation start
     kernel = tf.unstack(kernel, axis=0)
-    terms = [map_fn(si, k) for si, k in zip(sparse_indices, kernel)]
+    decay = tf.unstack(decay, axis=0)
+    terms = [
+        global_event_conv(features, *args, skip_dynamic_checks=True)
+        for args in zip(dt_, kernel, decay)
+    ]
     return tf.add_n(terms)
