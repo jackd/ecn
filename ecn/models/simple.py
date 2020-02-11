@@ -4,7 +4,6 @@ import tensorflow as tf
 from kblocks import spec
 from kblocks.keras import layers
 from kblocks.extras.layers import ragged as ragged_layers
-import kblocks.ops.sparse as sparse_ops
 from ecn.layers import conv as conv_layers
 
 Lambda = tf.keras.layers.Lambda
@@ -29,8 +28,7 @@ def simple_ecn(inputs_spec,
                temporal_kernel_size=4,
                activation='relu',
                dropout_prob=0.5,
-               use_batch_norm=True,
-               final_only=False):
+               use_batch_norm=True):
     inputs = tf.nest.map_structure(spec.to_input, inputs_spec)
     flat_inputs = tf.nest.flatten(inputs)
 
@@ -56,27 +54,24 @@ def simple_ecn(inputs_spec,
     for neigh in spatial_neighs:
         # neigh = Lambda(sparse_ops.remove_dim, arguments=dict(axis=0))(neigh)
         # neigh = sparse_ops.remove_dim(neigh)
-        features = conv_layers.SpatialEventConv(
+        features = conv_layers.SpatioTemporalEventConv(
             filters, temporal_kernel_size)([features, *neigh])
         features = activate(features)
-        # features = layers.Dense(filters * 4)(features)
-        # features = activate(features)
-        # features = layers.Dense(filters)(features)
-        # features = activate(features)
+        features = layers.Dense(filters * 4)(features)
+        features = activate(features)
+        features = layers.Dense(filters)(features)
+        features = activate(features)
         filters *= 2
     # global_neigh = Lambda(sparse_ops.remove_dim,
     #                       arguments=dict(axis=0))(global_neigh)
-    features = conv_layers.GlobalEventConv(
+    features = conv_layers.TemporalEventConv(
         filters, temporal_kernel_size)([features, global_neigh])
     features = activate(features)
 
-    num_classes = outputs_spec.shape[-1]
+    num_classes = outputs_spec[0].shape[-1]
+    assert (len(outputs_spec) == 2 and outputs_spec[1].shape[-1] == num_classes)
     logits_stream = layers.Dense(num_classes, name='stream')(features)
-    if final_only:
-        logits_final = Lambda(lambda args: tf.gather(*args),
-                              name='final')([logits_stream, final_indices])
-        outputs = logits_final
-    else:
-        outputs = logits_stream
-    # outputs = (logits_stream, logits_final)
+    logits_final = Lambda(lambda args: tf.gather(*args),
+                          name='final')([logits_stream, final_indices])
+    outputs = (logits_stream, logits_final)
     return tf.keras.Model(flat_inputs, outputs)

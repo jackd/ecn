@@ -4,12 +4,20 @@ import ecn.problems.nmnist
 import ecn.pipelines.scnn
 import kblocks.keras.optimizers
 import kblocks.path
+import kblocks.keras.layers
+import kblocks.keras.regularizers
+
+tf.keras.layers.Dense.kernel_regularizer = %regularizer
+ecn.layers.EventConvBase.kernel_regularizer = %regularizer
+regularizer = @tf.keras.regularizers.l2()
+tf.keras.regularizers.l2.l = 4e-5
 
 model_dir = @kb.path.model_dir()
 kb.path.model_dir.root_dir = '~/ecn'
 kb.path.model_dir.problem_id = 'nmnist'
 kb.path.model_dir.model_id = 'simple'
 kb.path.model_dir.variant_id = 'base'
+kb.path.model_dir.run = %run
 
 problem = @ecn.problems.nmnist()
 ecn.problems.nmnist.pipeline = %pipeline
@@ -19,9 +27,6 @@ pipeline = @scnn_pipeline()
 scnn_pipeline.batch_size = %batch_size
 scnn_pipeline.num_layers = %num_layers
 
-ecn.models.simple_ecn.final_only = %final_only
-ecn.pipelines.scnn_pipeline.final_only = %final_only
-
 optimizer_fn = @tf.keras.optimizers.Adam
 
 TfConfig.jit = True
@@ -29,9 +34,9 @@ TfConfig.jit = True
 kb.callbacks.CheckpointCallback.save_freq = 5
 validation_freq = 5
 epochs = 100
-batch_size = 64
+batch_size = 128
 num_layers = 3
-final_only = True
+run = 0
 
 # HACK
 # TfdsProblem.examples_per_epoch = 128

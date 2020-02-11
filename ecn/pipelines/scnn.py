@@ -158,32 +158,26 @@ def post_batch_map(inputs, labels, weights=None, final_only=False):
         (b, i, j), axis=-1), neigh.values, (batch_size, totals[-1], totals[-2]))
     out['final_indices'] = row_ends[:, -1] - 1
 
-    if not final_only:
-        repeats = lengths[:, -1]
-        # out_labels = {'final': labels}
-        # out_weights = {}
-        # if weights is None:
-        #     out_weights['final'] = tf.ones((batch_size,), dtype=tf.float32)
-        # else:
-        #     out_weights['final'] = weights
-        labels = tf_repeat(labels, repeats, axis=0)
-        if weights is None:
-            weights = 1.
-        weights = tf_repeat(weights / tf.cast(repeats, tf.float32),
-                            repeats,
-                            axis=0)
-        diff = totals[-1] - tf.size(labels, out_type=totals[-1].dtype)
-        labels = maybe_pad(labels, diff)
-        weights = maybe_pad(weights, diff)
-    return (out, labels) if weights is None else (out, labels, weights)
+    out_labels = {}
+    out_labels['final'] = labels
 
-    # out_labels['stream'] = labels
-    # out_weights['stream'] = weights
+    out_weights = {}
+    if weights is not None:
+        out_weights['final'] = weights
 
-    # return out, out_labels, out_weights
-    # out_labels = (out_labels['stream'], out_labels['final'])
-    # out_weights = (out_weights['stream'], out_weights['final'])
-    # return out, out_labels, out_weights
+    repeats = lengths[:, -1]
+    if weights is None:
+        weights = 1. / tf.cast(batch_size, tf.float32) / tf.cast(
+            repeats, dtype=tf.float32)
+    else:
+        weights = weights / tf.cast(batch_size * repeats, tf.float32)
+    weights = tf_repeat(weights, repeats, axis=0)
+    labels = tf_repeat(labels, repeats, axis=0)
+    diff = padded_size - tf.size(labels, out_type=totals[-1].dtype)
+    out_labels['stream'] = maybe_pad(labels, diff)
+    out_weights['stream'] = maybe_pad(weights, diff)
+
+    return out, out_labels, out_weights
 
 
 @gin.configurable(module='ecn.pipelines')

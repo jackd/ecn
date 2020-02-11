@@ -12,10 +12,25 @@ def nmnist(pipeline):
         NMNIST(),
         split_map={'validation': 'test'},
         pipeline=pipeline,
-        loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        metrics=(tf.keras.metrics.SparseCategoricalAccuracy(),),
+        loss={
+            'final':
+                tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True,
+                                                              name='final_xe'),
+            'stream':
+                tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True,
+                                                              reduction='sum',
+                                                              name='stream_xe'),
+        },
+        metrics={
+            'final': tf.keras.metrics.SparseCategoricalAccuracy(name='acc'),
+            'stream': tf.keras.metrics.SparseCategoricalAccuracy(name='acc'),
+        },
+        loss_weights={
+            'final': 0.0,
+            'stream': 1.0
+        },
         outputs_spec=(tf.TensorSpec(shape=(None, NUM_CLASSES),
-                                    dtype=tf.float32))
+                                    dtype=tf.float32),) * 2
         # loss=(
         #     tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
         #     None,  # final

@@ -155,7 +155,7 @@ def _spatial_size(input_shape) -> int:
 
 
 @gin.configurable(module='ecn.layers')
-class SpatialEventConv(EventConvBase):
+class SpatioTemporalEventConv(EventConvBase):
 
     def __init__(self,
                  filters: int,
@@ -163,7 +163,7 @@ class SpatialEventConv(EventConvBase):
                  spatial_kernel_size: Optional[int] = None,
                  **kwargs):
         self.spatial_kernel_size = spatial_kernel_size
-        super(SpatialEventConv, self).__init__(filters, temporal_kernel_size,
+        super(SpatioTemporalEventConv, self).__init__(filters, temporal_kernel_size,
                                                **kwargs)
 
     def _validate_kernel_size(self, input_shape):
@@ -198,7 +198,7 @@ class SpatialEventConv(EventConvBase):
         return (self.spatial_kernel_size, self.temporal_kernel_size)
 
     def get_config(self):
-        config = super(SpatialEventConv, self).get_config()
+        config = super(SpatioTemporalEventConv, self).get_config()
         config['spatial_kernel_size'] = self.spatial_kernel_size
         return config
 
@@ -206,7 +206,7 @@ class SpatialEventConv(EventConvBase):
         features, *dt = inputs
         if len(dt) == 1:
             dt, = dt
-        features = conv_ops.spatial_event_conv(
+        features = conv_ops.spatio_temporal_event_conv(
             features=features,
             dt=dt,
             kernel=self.kernel,
@@ -216,7 +216,7 @@ class SpatialEventConv(EventConvBase):
 
 
 @gin.configurable(module='ecn.layers')
-class GlobalEventConv(EventConvBase):
+class TemporalEventConv(EventConvBase):
 
     def _kernel_shape(self, input_shape):
         filters_in = input_shape[0][-1]
@@ -227,7 +227,7 @@ class GlobalEventConv(EventConvBase):
 
     def call(self, inputs):
         features, dt = inputs
-        features = conv_ops.global_event_conv(
+        features = conv_ops.temporal_event_conv(
             features=features,
             dt=dt,
             kernel=self.kernel,
@@ -236,16 +236,17 @@ class GlobalEventConv(EventConvBase):
         return self._finalize(features)
 
 
-def spatial_event_conv(features: FloatTensor, dt: tf.SparseTensor, filters: int,
-                       temporal_kernel_size: int, **kwargs):
-    return SpatialEventConv(filters=filters,
+def spatio_temporal_event_conv(
+        features: FloatTensor, dt: tf.SparseTensor, filters: int,
+        temporal_kernel_size: int, **kwargs):
+    return SpatioTemporalEventConv(filters=filters,
                             temporal_kernel_size=temporal_kernel_size,
                             **kwargs)([features, dt])
 
 
-def global_event_conv(features: FloatTensor, dt: tf.SparseTensor, filters: int,
-                      temporal_kernel_size: int, **kwargs):
-    return GlobalEventConv(filters=filters,
+def temporal_event_conv(features: FloatTensor, dt: tf.SparseTensor, filters: int,
+                        temporal_kernel_size: int, **kwargs):
+    return TemporalEventConv(filters=filters,
                            temporal_kernel_size=temporal_kernel_size,
                            **kwargs)([features, dt])
 
@@ -262,14 +263,14 @@ if __name__ == '__main__':
     dij = tf.stack((d, i, j), axis=-1)
     neigh = tf.SparseTensor(dij, tf.random.uniform((n_e,), dtype=tf.float32),
                             (sk, n_out, n_in))
-    layer = SpatialEventConv(2, 3, 4)
+    layer = SpatioTemporalEventConv(2, 3, 4)
     features = tf.random.normal((n_in, f_in))
     layer([features, neigh])
-    print('SpatialEventConv successfully built')
+    print('SpatioTemporalEventConv successfully built')
 
-    layer = GlobalEventConv(2, 3)
+    layer = TemporalEventConv(2, 3)
     ij = tf.stack((i, j), axis=-1)
     neigh = tf.SparseTensor(ij, tf.random.uniform((n_e,), dtype=tf.float32),
                             (n_out, n_in))
     layer([features, neigh])
-    print('GlobalEventConv successfully built')
+    print('TemporalEventConv successfully built')

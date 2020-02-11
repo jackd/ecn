@@ -7,7 +7,7 @@ IntTensor = tf.Tensor
 FloatTensor = tf.Tensor
 
 
-def global_event_conv(features: FloatTensor,
+def temporal_event_conv(features: FloatTensor,
                       dt: tf.SparseTensor,
                       kernel: FloatTensor,
                       decay: FloatTensor,
@@ -70,7 +70,7 @@ def global_event_conv(features: FloatTensor,
     return features
 
 
-def spatial_event_conv(features: FloatTensor,
+def spatio_temporal_event_conv(features: FloatTensor,
                        dt: Union[tf.SparseTensor, Iterable[tf.SparseTensor]],
                        kernel: FloatTensor, decay: FloatTensor) -> FloatTensor:
     """
@@ -141,7 +141,7 @@ def spatial_event_conv(features: FloatTensor,
     kernel = tf.unstack(kernel, axis=0)
     decay = tf.unstack(decay, axis=0)
     terms = [
-        global_event_conv(features, *args, skip_dynamic_checks=True)
+        temporal_event_conv(features, *args, skip_dynamic_checks=True)
         for args in zip(dt_, kernel, decay)
     ]
     return tf.add_n(terms)

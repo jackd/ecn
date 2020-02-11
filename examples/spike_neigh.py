@@ -128,6 +128,18 @@ for events, label in dataset.take(100):
         event_duration *= 2
         spatial_buffer_size //= 2
 
+        # in place
+        indices, splits = neigh.compute_neighbors(
+            out_time,
+            out_coords,
+            out_time,
+            out_coords,
+            event_duration=event_duration,
+            spatial_buffer_size=spatial_buffer_size
+        )
+        vis_adjacency(indices, splits, out_time, out_time, decay_time)
+        plt.show()
+
         time = out_time
         coords = out_coords
 

@@ -186,8 +186,8 @@ def reindex(original_indices: IntArray, reindex_index: IntArray) -> IntArray:
 
 
 @nb.njit()
-def mask_ragged_indices_row_splits(indices: IntArray, row_splits: IntArray,
-                                   mask: IntArray) -> Tuple[IntArray, IntArray]:
+def mask_ragged_cols(indices: IntArray, row_splits: IntArray,
+                     mask: IntArray) -> Tuple[IntArray, IntArray]:
     nrows = row_splits.size - 1
     out_indices = np.empty_like(indices)
     out_row_splits = np.empty_like(row_splits)
@@ -201,3 +201,35 @@ def mask_ragged_indices_row_splits(indices: IntArray, row_splits: IntArray,
                 j += 1
         out_row_splits[row + 1] = j
     return out_indices[:out_row_splits[-1]], out_row_splits
+
+
+@nb.njit()
+def mask_ragged_rows(indices: IntArray, row_splits: IntArray,
+                     mask: IntArray) -> Tuple[IntArray, IntArray]:
+    row_lengths = row_splits[1:] - row_splits[:-1]
+    row_lengths = row_lengths[mask]
+    total = np.sum(row_lengths)
+    out_indices = np.zeros((total,), dtype=indices.dtype)
+    out_row_splits = np.empty((total.size + 1,), dtype=row_splits.dtype)
+    jj = out_row_splits[0] = row_splits[0]
+    j = 0
+
+    for i in range(row_splits.size - 1):
+        if mask[i]:
+            for ii in range(row_splits[i], row_splits[i + 1]):
+                out_indices[jj] = indices[ii]
+                jj += 1
+            j += 1
+            out_row_splits[j] = jj
+    return out_indices, out_row_splits
+
+
+@nb.njit()
+def remove_unused_dependencies(indices: IntArray,
+                               row_splits: IntArray,
+                               max_index: int = -1):
+    mask = present_mask(indices, max_index=max_index)
+    ri = reindex_index(mask)
+    indices, row_splits = mask_ragged_cols(indices, row_splits, mask)
+    indices = reindex(indices, ri)
+    return indices, row_splits, mask, ri
