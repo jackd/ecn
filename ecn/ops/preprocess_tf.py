@@ -2,28 +2,27 @@
 # os.environ['NUMBA_DISABLE_JIT'] = '1'
 from typing import Tuple
 import numpy as np
-import numba as nb
-import ecn.np_utils.spike as spike_ops
-import ecn.np_utils.neighbors as neigh_ops
+import tensorflow as tf
+import ecn.ops.spike as spike_ops
+import ecn.ops.neighbors as neigh_ops
 
-BoolArray = np.ndarray
-IntArray = np.ndarray
+BoolTensor = tf.Tensor
+IntTensor = tf.Tensor
 
 # class SpatialConvArgs(NamedTuple):
-#     out_times: IntArray
-#     out_coords: IntArray
-#     indices: IntArray
-#     splits: IntArray
+#     out_times: IntTensor
+#     out_coords: IntTensor
+#     indices: IntTensor
+#     splits: IntTensor
 
 # class GlobalConvArgs(NamedTuple):
-#     out_times: IntArray
-#     indices: IntArray
-#     splits: IntArray
+#     out_times: IntTensor
+#     indices: IntTensor
+#     splits: IntTensor
 
 
-@nb.njit()
-def preprocess_spatial_conv(times: IntArray,
-                            coords: IntArray,
+def preprocess_spatial_conv(times: IntTensor,
+                            coords: IntTensor,
                             stride: int,
                             decay_time: int,
                             event_duration: int,
@@ -48,13 +47,12 @@ def preprocess_spatial_conv(times: IntArray,
     return out_times, out_coords, indices, splits
 
 
-@nb.njit()
-def preprocess_global_conv(times: IntArray,
+def preprocess_global_conv(times: IntTensor,
                            decay_time: int,
                            event_duration: int,
                            threshold: float = 2.,
                            reset_potential: float = -1.
-                          ) -> Tuple[IntArray, IntArray, IntArray]:
+                          ) -> Tuple[IntTensor, IntTensor, IntTensor]:
     out_times = spike_ops.global_spike_threshold(
         times, decay_time, threshold=threshold, reset_potential=reset_potential)
     indices, splits = neigh_ops.compute_global_neighbors(
@@ -62,37 +60,9 @@ def preprocess_global_conv(times: IntArray,
     return out_times, indices, splits
 
 
-@nb.njit()
-def _preprocess_network(times: IntArray,
-                        coords: IntArray,
-                        stride: int,
-                        decay_time: int,
-                        event_duration: int,
-                        spatial_buffer_size: int,
-                        num_layers: int,
-                        threshold: float = 2.,
-                        reset_potential: float = -1.):
-    for _ in range(num_layers):
-        out_times, out_coords, indices, splits = preprocess_spatial_conv(
-            times=times,
-            coords=coords,
-            stride=stride,
-            decay_time=decay_time,
-            event_duration=event_duration,
-            spatial_buffer_size=spatial_buffer_size,
-            threshold=threshold,
-            reset_potential=reset_potential)
-        yield out_times, out_coords, indices, splits
-        times = out_times
-        coords = out_coords
-        event_duration *= 2
-        decay_time *= 2
-
-
-@nb.njit()
 def preprocess_network(
-        times: IntArray,
-        coords: IntArray,
+        times: IntTensor,
+        coords: IntTensor,
         stride: int,
         decay_time: int,
         event_duration: int,
@@ -101,22 +71,25 @@ def preprocess_network(
         threshold: float = 2.,
         reset_potential: float = -1.,
 ):  # -> Tuple[Tuple[SpatialConvArgs, ...], GlobalConvArgs]:
-    layer_args = list(
-        _preprocess_network(
+    layer_args = []
+    for _ in range(num_layers):
+        out_times, out_coords, indices, splits = args = preprocess_spatial_conv(
             times=times,
             coords=coords,
             stride=stride,
             decay_time=decay_time,
             event_duration=event_duration,
             spatial_buffer_size=spatial_buffer_size,
-            num_layers=num_layers,
             threshold=threshold,
-            reset_potential=reset_potential,
-        ))
-    times = layer_args[-1][0]
-    time_factor = 2**num_layers
-    decay_time *= time_factor
-    event_duration *= time_factor
+            reset_potential=reset_potential)
+        del indices, splits
+
+        layer_args.append(args)
+        times = out_times
+        coords = out_coords
+        event_duration *= 2
+        decay_time *= 2
+
     global_args = preprocess_global_conv(
         times=times,
         decay_time=decay_time,
@@ -127,42 +100,35 @@ def preprocess_network(
     return layer_args, global_args
 
 
-@nb.njit()
-def trim_args(times: IntArray, coords: IntArray, polarity: IntArray, layer_args,
-              global_args):
+def trim_args(times: IntTensor, coords: IntTensor, polarity: IntTensor,
+              layer_args, global_args):
     base_times = times
     base_coords = coords
     times, indices, splits = global_args
-    size = 1 if indices.size == 0 else (np.max(indices) + 1)
-    mask = np.zeros((size,), dtype=np.bool_)
-    mask[indices] = True
-    ri = neigh_ops.reindex_index(mask)
-    indices = neigh_ops.reindex(indices, ri)
+    unique_indices, ri = tf.unique(indices)
+    indices = tf.gather(ri, indices)
     global_args = (times, indices, splits)
     for i in range(len(layer_args) - 1, -1, -1):
         times, coords, indices, splits = layer_args[i]
-        indices, splits = neigh_ops.mask_ragged_rows(indices, splits, mask)
-        times = times[:size][mask]
-        coords = coords[:size][mask]
+        rt = tf.RaggedTensor.from_row_splits(indices, splits)
+        rt = tf.gather(rt, unique_indices)
+        indices = rt.values
+        splits = rt.row_splits
+        times = tf.gather(times, unique_indices)
+        coords = tf.gather(coords, unique_indices)
 
-        size = 1 if indices.size == 0 else (np.max(indices) + 1)
-        mask = np.zeros((size,), dtype=np.bool_)
-        mask[indices] = True
-        ri = neigh_ops.reindex_index(mask)
-        indices = neigh_ops.reindex(indices, ri)
-
+        unique_indices, ri = tf.unique(indices)
         layer_args[i] = (times, coords, indices, splits)
-    times = base_times[:size][mask]
-    coords = base_coords[:size][mask]
-    polarity = polarity[:size][mask]
+
+    times, coords, polarity = (tf.gather(x, unique_indices)
+                               for x in (base_times, base_coords, polarity))
     return times, coords, polarity, layer_args, global_args
 
 
-@nb.njit()
 def preprocess_network_trimmed(
-        times: IntArray,
-        coords: IntArray,
-        polarity: BoolArray,
+        times: IntTensor,
+        coords: IntTensor,
+        polarity: BoolTensor,
         stride: int,
         decay_time: int,
         event_duration: int,
@@ -189,9 +155,9 @@ if __name__ == '__main__':
     from events_tfds.events.nmnist import NMNIST
     ds = NMNIST().as_dataset(split='train', as_supervised=True)
     for example, label in ds.take(5):
-        coords = example['coords'].numpy()
-        times = example['time'].numpy()
-        polarity = example['polarity'].numpy()
+        coords = example['coords']
+        times = example['time']
+        polarity = example['polarity']
         preprocess_network_trimmed(times,
                                    coords,
                                    polarity=polarity,

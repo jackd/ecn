@@ -22,34 +22,44 @@ def maybe_pad(values, diff):
                    lambda: values)
 
 
-def pre_map(events, labels, weights=None, stride=2, num_layers=3):
+def pre_map(events,
+            labels,
+            weights=None,
+            stride=2,
+            num_layers=3,
+            decay_time=10000,
+            event_duration=None,
+            threshold=2.,
+            reset_potential=-2.,
+            spatial_buffer_size=32):
     times = events.pop('time')
     times = times - tf.reduce_min(times)
     coords = events.pop('coords')
     coords = coords - tf.reduce_min(coords, axis=0)
-    polarity = events['polarity']
-    out = dict(polarity=ragged_ops.pre_batch_ragged(polarity),)
+    polarity = events.pop('polarity')
+    out = {}
     del events
     ndims = coords.shape.ndims
     sk = stride**ndims
 
-    decay_time = 10000
-    event_duration = decay_time * 4  # ~ 2% potential remaining by this point
-    spatial_buffer_size = 32
-    threshold = 2.
-    reset_potential = -2.
+    if event_duration is None:
+        event_duration = decay_time * 4  # ~ 2% potential remaining by this point
 
-    spatial_args, global_args = pp.preprocess_network(
-        times,
-        coords,
-        stride=stride,
-        decay_time=decay_time,
-        event_duration=event_duration,
-        spatial_buffer_size=spatial_buffer_size,
-        num_layers=num_layers,
-        threshold=threshold,
-        reset_potential=reset_potential,
-    )
+    (times, coords, polarity, spatial_args,
+     global_args) = pp.preprocess_network_trimmed(
+         times,
+         coords,
+         polarity,
+         stride=stride,
+         decay_time=decay_time,
+         event_duration=event_duration,
+         spatial_buffer_size=spatial_buffer_size,
+         num_layers=num_layers,
+         threshold=threshold,
+         reset_potential=reset_potential,
+     )
+
+    out['polarity'] = ragged_ops.pre_batch_ragged(polarity)
 
     spatial_neighs = []
     all_sizes = [tf.size(times, out_type=tf.int64)]

@@ -8,7 +8,7 @@ from ecn.np_utils import neighbors as neigh
 # from ecn.np_utils import conv
 from events_tfds.events.nmnist import NMNIST
 from events_tfds.vis.image import as_frames
-import events_tfds.vis.anim as anim
+# import events_tfds.vis.anim as anim
 
 from scipy.sparse import coo_matrix
 import matplotlib.pyplot as plt
@@ -23,7 +23,7 @@ def vis_adjacency(indices, split, in_times, out_times, decay_time):
     values = np.exp(-(out_times[i] - in_times[j]) / decay_time)
     sp = coo_matrix((values, (i, j)))
     ax0.spy(sp, markersize=1)
-    ax1.imshow(sp.todense(), cmap='gray')
+    ax1.imshow(sp.todense(), cmap='gray_r')
 
     mask = values > 1e-2
     print('mean significant adjacency: {}'.format(np.mean(mask)))
@@ -111,7 +111,11 @@ for events, label in dataset.take(100):
             event_duration=event_duration,
             spatial_buffer_size=spatial_buffer_size,
         )
-        indices = indices[:splits[-1]]
+        mask = np.zeros((time.size,), dtype=np.bool)
+        mask[indices] = True
+        ri = neigh.reindex_index(mask)
+        indices0 = neigh.reindex(indices, ri)
+        print('events: ', np.count_nonzero(mask), time.size)
 
         vis_graph(coords,
                   time, (out_coords + 0.5) * stride - 0.5,
@@ -135,8 +139,7 @@ for events, label in dataset.take(100):
             out_time,
             out_coords,
             event_duration=event_duration,
-            spatial_buffer_size=spatial_buffer_size
-        )
+            spatial_buffer_size=spatial_buffer_size)
         vis_adjacency(indices, splits, out_time, out_time, decay_time)
         plt.show()
 

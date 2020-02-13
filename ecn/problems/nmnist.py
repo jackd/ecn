@@ -7,7 +7,11 @@ import gin
 
 
 @gin.configurable(module='ecn.problems')
-def nmnist(pipeline):
+def nmnist(pipeline, target='final'):
+    if target == 'final':
+        loss_weights = {'final': 1.0, 'stream': 0.0}
+    else:
+        loss_weights = {'final': 0.0, 'stream': 1.0}
     return TfdsProblem(
         NMNIST(),
         split_map={'validation': 'test'},
@@ -25,40 +29,9 @@ def nmnist(pipeline):
             'final': tf.keras.metrics.SparseCategoricalAccuracy(name='acc'),
             'stream': tf.keras.metrics.SparseCategoricalAccuracy(name='acc'),
         },
-        loss_weights={
-            'final': 0.0,
-            'stream': 1.0
-        },
+        loss_weights=loss_weights,
         outputs_spec=(tf.TensorSpec(shape=(None, NUM_CLASSES),
-                                    dtype=tf.float32),) * 2
-        # loss=(
-        #     tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        #     None,  # final
-        # ),
-        # metrics=(
-        #     (tf.keras.metrics.SparseCategoricalAccuracy(name='stream_acc'),),
-        #     (tf.keras.metrics.SparseCategoricalAccuracy(name='final_acc'),),
-        # ),
-        # outputs_spec=(tf.TensorSpec(shape=(None, NUM_CLASSES),
-        #                             dtype=tf.float32),) * 2
-
-        # loss={
-        #     'stream':
-        #         tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        #     'final':
-        #         None
-        # },
-        # metrics={
-        #     'stream': (tf.keras.metrics.SparseCategoricalAccuracy(),),
-        #     'final': (tf.keras.metrics.SparseCategoricalAccuracy(),),
-        # },
-        # outputs_spec={
-        #     'stream':
-        #         tf.TensorSpec(shape=(None, NUM_CLASSES), dtype=tf.float32),
-        #     'final':
-        #         tf.TensorSpec(shape=(None, NUM_CLASSES), dtype=tf.float32),
-        # }
-    )
+                                    dtype=tf.float32),) * 2)
 
 
 @gin.configurable(module='ecn.problems')

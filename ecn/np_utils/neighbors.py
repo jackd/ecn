@@ -165,19 +165,9 @@ def compute_neighbors(
     return index_values[:index_splits[-1]], index_splits
 
 
-@nb.njit()
-def present_mask(indices: IntArray, max_index: int = -1) -> BoolArray:
-    if max_index == -1:
-        max_index = np.max(indices)
-    mask = np.zeros((max_index,), dtype=np.bool)
-    for i in indices:
-        mask[i] = True
-    return mask
-
-
 @nb.njit(inline='always')
 def reindex_index(mask: BoolArray) -> IntArray:
-    return np.cumsum(mask, dtype=np.int64) - 1
+    return np.cumsum(mask) - 1
 
 
 @nb.njit(inline='always')
@@ -186,35 +176,18 @@ def reindex(original_indices: IntArray, reindex_index: IntArray) -> IntArray:
 
 
 @nb.njit()
-def mask_ragged_cols(indices: IntArray, row_splits: IntArray,
-                     mask: IntArray) -> Tuple[IntArray, IntArray]:
-    nrows = row_splits.size - 1
-    out_indices = np.empty_like(indices)
-    out_row_splits = np.empty_like(row_splits)
-    out_row_splits[0] = row_splits[0]
-    j = 0
-    for row in range(nrows):
-        for i in range(indices[row], indices[row + 1]):
-            ii = indices[i]
-            if mask[ii]:
-                out_indices[j] = ii
-                j += 1
-        out_row_splits[row + 1] = j
-    return out_indices[:out_row_splits[-1]], out_row_splits
-
-
-@nb.njit()
 def mask_ragged_rows(indices: IntArray, row_splits: IntArray,
-                     mask: IntArray) -> Tuple[IntArray, IntArray]:
+                     mask: BoolArray) -> Tuple[IntArray, IntArray]:
     row_lengths = row_splits[1:] - row_splits[:-1]
-    row_lengths = row_lengths[mask]
+    row_lengths = row_lengths[:mask.size][mask]
     total = np.sum(row_lengths)
     out_indices = np.zeros((total,), dtype=indices.dtype)
-    out_row_splits = np.empty((total.size + 1,), dtype=row_splits.dtype)
+    out_row_splits = np.empty((np.count_nonzero(mask) + 1,),
+                              dtype=row_splits.dtype)
     jj = out_row_splits[0] = row_splits[0]
     j = 0
 
-    for i in range(row_splits.size - 1):
+    for i in range(mask.size):
         if mask[i]:
             for ii in range(row_splits[i], row_splits[i + 1]):
                 out_indices[jj] = indices[ii]
@@ -222,14 +195,3 @@ def mask_ragged_rows(indices: IntArray, row_splits: IntArray,
             j += 1
             out_row_splits[j] = jj
     return out_indices, out_row_splits
-
-
-@nb.njit()
-def remove_unused_dependencies(indices: IntArray,
-                               row_splits: IntArray,
-                               max_index: int = -1):
-    mask = present_mask(indices, max_index=max_index)
-    ri = reindex_index(mask)
-    indices, row_splits = mask_ragged_cols(indices, row_splits, mask)
-    indices = reindex(indices, ri)
-    return indices, row_splits, mask, ri

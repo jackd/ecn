@@ -21,6 +21,8 @@ kb.path.model_dir.run = %run
 
 problem = @ecn.problems.nmnist()
 ecn.problems.nmnist.pipeline = %pipeline
+ecn.problems.nmnist.target = %target
+
 model_fn = @ecn.models.simple_ecn
 
 pipeline = @scnn_pipeline()
@@ -37,7 +39,8 @@ epochs = 100
 batch_size = 128
 num_layers = 3
 run = 0
+target ='stream'  # or 'final'
 
 # HACK
 # TfdsProblem.examples_per_epoch = 128
-CustomPipeline.cache_path = '/tmp/nmnist-simple'
+CustomPipeline.cache_dir = '/tmp/nmnist-simple'
