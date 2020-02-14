@@ -1,6 +1,7 @@
 from typing import Optional, Callable
 import tensorflow as tf
-from ecn.meta import core
+from kblocks.tf_typing import TensorLike
+from . import core
 
 
 class DebugBuilderContext(core.MetaBuilderContext):
@@ -8,6 +9,12 @@ class DebugBuilderContext(core.MetaBuilderContext):
     def __init__(self, batch_size: int = 2):
         self._batch_size = batch_size
         self._model_inputs = []
+
+    def get_mark(self, x: TensorLike):
+        return None
+
+    def set_mark(self, x: TensorLike, mark: str):
+        pass
 
     @property
     def batch_size(self) -> int:

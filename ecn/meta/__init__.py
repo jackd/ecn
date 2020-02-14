@@ -1,9 +1,10 @@
-from ecn.meta.core import batch
-from ecn.meta.core import model_input
-from ecn.meta.debug import debug_builder
-from ecn.meta.multi_graph import build_multi_graph
-from ecn.meta.multi_graph import subgraph
-from ecn.meta.multi_model import build_multi_model
+from .marks import BuiltModels
+from .core import batch
+from .core import model_input
+from .debug import debug_builder
+from .multi_graph import build_multi_graph
+from .multi_graph import subgraph
+from .multi_model import build_multi_model
 
 __all__ = [
     'batch',
@@ -12,6 +13,7 @@ __all__ = [
     'build_multi_graph',
     'subgraph',
     'build_multi_model',
+    'BuiltModels',
 ]
 
 # import ecn.meta.debug as debug

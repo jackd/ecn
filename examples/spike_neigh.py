@@ -5,10 +5,12 @@ import numpy as np
 import tensorflow as tf
 from ecn.np_utils import spike
 from ecn.np_utils import neighbors as neigh
+from ecn.np_utils import grid
+import ecn.np_utils.ragged as ragged
 # from ecn.np_utils import conv
 from events_tfds.events.nmnist import NMNIST
 from events_tfds.vis.image import as_frames
-# import events_tfds.vis.anim as anim
+import events_tfds.vis.anim as anim
 
 from scipy.sparse import coo_matrix
 import matplotlib.pyplot as plt
@@ -73,80 +75,101 @@ frame_kwargs = dict(num_frames=20)
 all_event_counts = []
 
 for events, label in dataset.take(100):
-    decay_time = 10000
-    event_duration = decay_time * 6
+    decay_time = 7500
+    event_duration = decay_time * 4
     spatial_buffer_size = 32
+    in_shape = np.array((34, 34))
 
-    coords = events['coords']
+    coords = events['coords'].numpy()
     time = events['time'].numpy()
     polarity = events['polarity'].numpy()
 
     print('{} events over {} dt'.format(time.size, np.max(time) - np.min(time)))
 
-    coords = (coords - tf.reduce_min(coords, axis=0)).numpy()
+    coords_1d = grid.ravel_multi_index_transpose(coords, in_shape)
     img_data = [as_frames(coords, time, polarity, **frame_kwargs)]
     sizes = [time.size]
     spike_kwargs = dict(threshold=2., reset_potential=-2.)
+    neigh_kwargs = dict(kernel_shape=np.array((3, 3)),
+                        strides=np.array((2, 2)),
+                        padding=np.array((0, 0)))
 
-    for i in range(3):
+    for i in range(2):
         print('-------------')
         print('---LAYER {}---'.format(i))
-        pooled_coords = coords // 2
+        p, neigh_indices, splits, out_shape = grid.sparse_neighborhood(
+            in_shape, **neigh_kwargs)
+        neigh_indices_T, splits_T = ragged.transpose_csr(neigh_indices, splits)
 
-        out_time, out_coords = spike.spike_threshold(
+        out_time, out_coords_1d = spike.spike_threshold_1d(
             time,
-            pooled_coords,
+            coords_1d,
             decay_time=decay_time,
+            neigh_indices=neigh_indices_T,
+            neigh_splits=splits_T,
             **spike_kwargs,
         )
+        out_coords = grid.unravel_index_transpose(out_coords_1d, out_shape)
         out_events = out_time.size
         print('events {}: {}'.format(i, out_events))
         sizes.append(out_events)
 
-        indices, splits = neigh.compute_neighbors(
-            time,
-            pooled_coords,
-            out_time,
-            out_coords,
-            event_duration=event_duration,
-            spatial_buffer_size=spatial_buffer_size,
-        )
-        mask = np.zeros((time.size,), dtype=np.bool)
-        mask[indices] = True
-        ri = neigh.reindex_index(mask)
-        indices0 = neigh.reindex(indices, ri)
-        print('events: ', np.count_nonzero(mask), time.size)
+        # partitions, indices, splits = neigh.compute_neighbors_nd(
+        #     time,
+        #     coords.copy(),
+        #     out_time,
+        #     out_coords * stride,
+        #     neighbor_offsets=neigh.neighbor_offsets((stride, stride)),
+        #     event_duration=event_duration,
+        #     spatial_buffer_size=spatial_buffer_size,
+        # )
+        # mask = np.zeros((time.size,), dtype=np.bool)
+        # mask[indices] = True
+        # ri = neigh.reindex_index(mask)
+        # indices0 = neigh.reindex(indices, ri)
+        # print('events: ', np.count_nonzero(mask), time.size)
 
-        vis_graph(coords,
-                  time, (out_coords + 0.5) * stride - 0.5,
-                  out_time,
-                  indices,
-                  splits,
-                  n=10)
-        vis_adjacency(indices, splits, time, out_time, decay_time)
-        plt.show()
+        # vis_graph(coords,
+        #           time,
+        #           out_coords * stride + 0.5,
+        #           out_time,
+        #           indices,
+        #           splits,
+        #           n=10)
+        # vis_adjacency(indices, splits, time, out_time, decay_time)
+        # plt.show()
 
-        print('neighbors {}: {}'.format(i, indices.size))
+        # print('neighbors {}: {}'.format(i, indices.size))
 
-        decay_time *= 2
-        event_duration *= 2
-        spatial_buffer_size //= 2
+        # decay_time *= 2
+        # event_duration *= 2
+        # spatial_buffer_size //= 2
 
-        # in place
-        indices, splits = neigh.compute_neighbors(
-            out_time,
-            out_coords,
-            out_time,
-            out_coords,
-            event_duration=event_duration,
-            spatial_buffer_size=spatial_buffer_size)
-        vis_adjacency(indices, splits, out_time, out_time, decay_time)
-        plt.show()
+        # # in place
+        # partitions, indices, splits = neigh.compute_neighbors_nd(
+        #     out_time,
+        #     out_coords.copy(),
+        #     out_time,
+        #     out_coords.copy(),
+        #     neighbor_offsets=neigh.neighbor_offsets((3, 3)),
+        #     event_duration=event_duration,
+        #     spatial_buffer_size=spatial_buffer_size)
+
+        # vis_graph(out_coords,
+        #           out_time,
+        #           out_coords,
+        #           out_time,
+        #           indices,
+        #           splits,
+        #           n=10)
+        # vis_adjacency(indices, splits, out_time, out_time, decay_time)
+        # plt.show()
 
         time = out_time
-        coords = out_coords
+        coords_1d = out_coords_1d
+        in_shape = out_shape
 
-        img_data.append(as_frames(coords, time, **frame_kwargs))
+        img_data.append(as_frames(out_coords, time, **frame_kwargs))
 
     global_times = spike.global_spike_threshold(
         time,
@@ -173,6 +196,6 @@ for events, label in dataset.take(100):
     print(sizes)
     all_event_counts.append(sizes)
 
-    # anim.animate_frames_multi(*img_data, fps=4)
+    anim.animate_frames_multi(*img_data, fps=4)
 
 print(np.mean(all_event_counts, axis=0))

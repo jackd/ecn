@@ -2,11 +2,9 @@ from typing import Optional, Union, TypeVar
 import abc
 from typing import List
 import tensorflow as tf
+from kblocks.tf_typing import TensorLike, TensorLikeSpec
 
 T = TypeVar('T')
-
-TensorLike = Union[tf.Tensor, tf.SparseTensor, tf.RaggedTensor]
-TensorSpecLike = Union[tf.TensorSpec, tf.SparseTensorSpec, tf.RaggedTensorSpec]
 
 
 class MetaBuilderContext(object):
@@ -46,6 +44,14 @@ class MetaBuilderContext(object):
     def model_input(self, tensor: TensorLike, name: Optional[str] = None):
         raise NotImplementedError('Abstract method')
 
+    @abc.abstractmethod
+    def get_mark(self, x: TensorLike):
+        raise NotImplementedError('Abstract method')
+
+    @abc.abstractmethod
+    def set_mark(self, x: TensorLike, mark: str):
+        raise NotImplementedError('Abstract method')
+
     # @abc.abstractmethod
     # def learning_phase(self):
     #     raise NotImplementedError('Abstract method')
@@ -65,6 +71,14 @@ def batch(tensor: TensorLike) -> TensorLike:
 
 def model_input(tensor: TensorLike, name: Optional[str] = None) -> TensorLike:
     return get_default().model_input(tensor, name=name)
+
+
+def get_mark(x: TensorLike):
+    return get_default().get_mark(x)
+
+
+def set_mark(x: TensorLike, mark: str):
+    return get_default().set_mark(x, mark)
 
 
 # def learning_phase() -> tf.Tensor:

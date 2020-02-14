@@ -3,8 +3,8 @@
 from typing import Tuple
 import numpy as np
 import numba as nb
-import ecn.np_utils.spike as spike_ops
-import ecn.np_utils.neighbors as neigh_ops
+from . import spike as spike_ops
+from . import neighbors as neigh_ops
 
 BoolArray = np.ndarray
 IntArray = np.ndarray

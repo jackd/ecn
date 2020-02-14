@@ -108,7 +108,7 @@ class CoreMetaTest(tf.test.TestCase):
         actual_labels = None
         for actual_z, actual_labels in processed.take(1):
             pass
-        actual_out = built.trained_model()(actual_z)
+        actual_out = built.trained_model(actual_z)
 
         # expected
         processed = dataset.map(pre_batch_map).batch(batch_size).map(
