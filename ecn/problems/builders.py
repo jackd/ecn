@@ -144,7 +144,7 @@ def inception_multi_graph(features,
                           decay_time=10000,
                           spatial_buffer=32,
                           reset_potential=-2.0,
-                          threshold=1.1,
+                          threshold=1.0,
                           filters0: int = 32,
                           kt0: int = 4,
                           hidden_units: Sequence[int] = (128,),
@@ -157,7 +157,8 @@ def inception_multi_graph(features,
     spike_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
 
     grid = comp.Grid(grid_shape)
-    link = grid.link((3, 3), (1, 1), (0, 0))
+    # link = grid.link((3, 3), (1, 1), (0, 0))
+    link = grid.link((5, 5), (1, 1), (1, 1))
 
     in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=5000)
     # in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=None)
@@ -165,8 +166,9 @@ def inception_multi_graph(features,
     out_stream = comp.spike_threshold(in_stream,
                                       link,
                                       decay_time=decay_time,
-                                      min_mean_size=1024,
-                                      **spike_kwargs)
+                                      min_mean_size=2048,
+                                      reset_potential=reset_potential,
+                                      threshold=0.75 * threshold)
 
     features = in_stream.prepare_model_inputs(polarity)
     features = tf.keras.layers.Lambda(lambda x: tf.identity(x.values))(features)
@@ -191,7 +193,7 @@ def inception_multi_graph(features,
     t_kernel[2] = True
     t_kernel[:, 2] = True
 
-    for min_mean_size in (512, 128):
+    for min_mean_size in (512, 256):
         # in place
         link = in_stream.grid.partial_self_link(t_kernel)
         t_convolver = comp.spatio_temporal_convolver(
@@ -249,7 +251,7 @@ def inception_multi_graph(features,
 
     global_stream = comp.global_spike_threshold(in_stream,
                                                 decay_time=decay_time,
-                                                min_mean_size=32,
+                                                min_mean_size=64,
                                                 **spike_kwargs)
     flat_convolver = comp.flatten_convolver(in_stream, global_stream,
                                             decay_time)

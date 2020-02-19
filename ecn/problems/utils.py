@@ -120,19 +120,11 @@ def vis_streams(build_fn, base_source: DataSource, num_frames=20, fps=4):
                           polarity=polarity.numpy() if i == 0 else None,
                           shape=shape))
 
-        anim.animate_frames_multi(*img_data, fps=fps)
+        # anim.animate_frames_multi(*img_data, fps=fps)
 
 
 if __name__ == '__main__':
-    from ecn.problems.builders import simple_multi_graph
+    # from ecn.problems.builders import simple_multi_graph
+    from ecn.problems.builders import inception_multi_graph
     from ecn.problems.nmnist import nmnist_source
-    vis_streams(simple_multi_graph, nmnist_source())
-#     from ecn.problems.nmnist import simple_multi_graph
-#     from ecn.problems.nmnist import nmnist_source
-#     trainable = multi_grpah_trainable(simple_multi_graph,
-#                                       nmnist_source(),
-#                                       batch_size=16,
-#                                       compiler=compile_stream_classifier)
-#     source = trainable.source
-#     for example in source:
-#         pass
+    vis_streams(inception_multi_graph, nmnist_source())

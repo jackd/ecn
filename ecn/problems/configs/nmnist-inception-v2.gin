@@ -1,0 +1,5 @@
+include 'nmnist-inception.gin'
+inception_multi_graph.filters0 = 64
+inception_multi_graph.hidden_units = (256,)
+
+variant_id = 'v2'
