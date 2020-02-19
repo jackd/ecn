@@ -1,0 +1,14 @@
+{
+    "include": [
+        "examples",
+        "ecn"
+    ],
+    "typingsPath": "../kblocks/typings",
+    "pythonPlatform": "Linux",
+    "pythonVersion": "3.6",
+    "reportTypeshedErrors": false,
+    "reportMissingImports": false,
+    "reportMissingTypeStubs": false,
+    "reportUntypedFunctionDecorator": true,
+    "reportUntypedClassDecorator": true
+}

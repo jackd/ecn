@@ -1,6 +1,9 @@
 from .marks import BuiltModels
 from .core import batch
 from .core import model_input
+from .core import assert_mark
+from .core import get_mark
+from .core import set_mark
 from .debug import debug_builder
 from .multi_graph import build_multi_graph
 from .multi_graph import subgraph
@@ -14,6 +17,9 @@ __all__ = [
     'subgraph',
     'build_multi_model',
     'BuiltModels',
+    'assert_mark',
+    'get_mark',
+    'set_mark',
 ]
 
 # import ecn.meta.debug as debug

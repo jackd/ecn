@@ -1,0 +1,7 @@
+import ecn.problems.nmnist
+
+base_source = @nmnist_source()
+batch_size = 32
+epochs = 100
+
+problem_id = 'nmnist'

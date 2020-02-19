@@ -1,7 +1,3 @@
-import os
-os.environ['ECN_CONFIG'] = os.path.join(
-    os.path.realpath(os.path.dirname(__file__)), 'configs')
-
 msg = 'tensorflow>=2.0 required, but {} found'
 try:
     import tensorflow as tf

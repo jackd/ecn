@@ -81,6 +81,13 @@ def set_mark(x: TensorLike, mark: str):
     return get_default().set_mark(x, mark)
 
 
+def assert_mark(x: TensorLike, mark: str, name: str = 'tensor'):
+    actual = get_mark(x)
+    if actual != mark:
+        raise ValueError('Expected {} to have mark {}, but has {}'.format(
+            name, mark, actual))
+
+
 # def learning_phase() -> tf.Tensor:
 #     if has_default():
 #         return get_default().learning_phase()

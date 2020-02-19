@@ -7,11 +7,67 @@ IntTensor = tf.Tensor
 FloatTensor = tf.Tensor
 
 
+def binary_temporal_event_conv(features: BoolTensor,
+                               dt: tf.SparseTensor,
+                               kernel: FloatTensor,
+                               decay: FloatTensor,
+                               validate: bool = True) -> FloatTensor:
+    """
+    Global event convolution on binary inputs.
+
+    Documentation uses the following:
+        n_in: number of input events
+        n_out: number of output events
+        f_out: number of output features per output event
+        tk: temporal kernel size
+        E: number of edges
+
+    Args:
+        features: [n_in] bool tensor of input events.
+        dt: Sparse tensor with non-negative time differences for values,
+            `dense_shape == [n_out, n_in]`.
+        kernel: [2*tk, f_out] kernel weights
+        decay: [tk] non-negative decay weights in units per-time.
+
+    Returns:
+        [n_out, f_out] output features.
+    """
+    # arg checking
+    features.shape.assert_has_rank(1)
+    kt = decay.shape[0]
+    assert (kt is not None)
+
+    if validate:
+        n_in = dt.dense_shape[-1]
+        tf.assert_equal(
+            tf.shape(features, out_type=getattr(n_in, 'dtype', tf.int64))[0],
+            n_in)
+    assert (features.dtype == tf.bool)
+    kernel.shape.assert_has_rank(2)
+    decay.shape.assert_has_rank(1)
+    assert (kernel.shape[0] == 2 * decay.shape[0])
+
+    assert (isinstance(dt, tf.SparseTensor))
+    dt.shape.assert_has_rank(2)
+    values = tf.exp(-tf.expand_dims(decay, axis=0) *
+                    tf.expand_dims(dt.values, axis=-1))  # [E, kt]
+    i, j = tf.unstack(dt.indices, axis=-1)
+    features = tf.gather(features, j)
+    segments = i * 2 + tf.cast(features, i.dtype)
+    n_out = dt.dense_shape[0]
+    # n_out * (2 * tk)
+    row_sum = tf.math.unsorted_segment_sum(values,
+                                           segments,
+                                           num_segments=n_out * 2)
+    row_sum = tf.reshape(row_sum, (-1, 2 * kt))
+    return tf.matmul(row_sum, kernel)
+
+
 def temporal_event_conv(features: FloatTensor,
-                      dt: tf.SparseTensor,
-                      kernel: FloatTensor,
-                      decay: FloatTensor,
-                      skip_dynamic_checks=False) -> FloatTensor:
+                        dt: tf.SparseTensor,
+                        kernel: FloatTensor,
+                        decay: FloatTensor,
+                        validate: bool = True) -> FloatTensor:
     """
     Global event convolution.
 
@@ -24,9 +80,9 @@ def temporal_event_conv(features: FloatTensor,
         E: number of edges
 
     Args:
-        in_features: [n_in, f_in] float tensor of input event features.
+        features: [n_in, f_in] float tensor of input event features.
         dt: Sparse tensor with non-negative time differences for values,
-            `dense shape` [n_out, n_in].
+            `dense_shape == [n_out, n_in]`.
         kernel: [tk, f_in, f_out] kernel weights.
         decay: [tk] non-negative decay weights in units per-time.
 
@@ -35,7 +91,7 @@ def temporal_event_conv(features: FloatTensor,
     """
     # arg checking
     features.shape.assert_has_rank(2)
-    if not skip_dynamic_checks:
+    if validate:
         n_in = dt.dense_shape[-1]
         tf.assert_equal(
             tf.shape(features, out_type=getattr(n_in, 'dtype', tf.int64))[0],
@@ -70,9 +126,59 @@ def temporal_event_conv(features: FloatTensor,
     return features
 
 
-def spatio_temporal_event_conv(features: FloatTensor,
-                       dt: Union[tf.SparseTensor, Iterable[tf.SparseTensor]],
-                       kernel: FloatTensor, decay: FloatTensor) -> FloatTensor:
+def binary_spatio_temporal_event_conv(
+        features: BoolTensor,
+        dt: Union[tf.SparseTensor, Iterable[tf.SparseTensor]],
+        kernel: FloatTensor, decay: FloatTensor) -> FloatTensor:
+    """
+    Event convolution.
+
+    Documentation uses the following:
+        n_in: number of input events
+        n_out: number of output events
+        f_out: number of output features per output event
+        sk: number of spatial elements of the kernel. E.g. a 2x2 conv has k=4
+        tk: number of temporal elements of the kernel.
+
+    Args:
+        features: [n_in] float tensor of input event features.
+        dt: rank-3 `SpareTensor` with `dense_shape` [sk, n_out, n_in] and values
+            of non-negative time differences.
+        kernel: [sk, 2*tk, f_out] kernel weights.
+        decay: [sk, tk] decay weights in units per-time.
+
+    Returns:
+        [n_out, f_out] output features.
+    """
+    decay.shape.assert_has_rank(2)
+    kernel.shape.assert_has_rank(3)
+    assert (decay.dtype.is_floating)
+    sk = decay.shape[0]
+    assert (sk is not None)
+
+    assert (kernel.shape[0] == sk)
+    assert (kernel.dtype.is_floating)
+    assert (kernel.shape[0] == decay.shape[0])
+    assert (kernel.shape[1] == 2 * decay.shape[1])
+    features.shape.assert_has_rank(1)
+    assert (features.dtype.is_bool)
+
+    dt_ = _split_spatial_dt(dt, sk)
+
+    # implementation start
+    kernel = tf.unstack(kernel, axis=0)
+    decay = tf.unstack(decay, axis=0)
+    terms = [
+        binary_temporal_event_conv(features, *args, validate=False)
+        for args in zip(dt_, kernel, decay)
+    ]
+    return tf.add_n(terms)
+
+
+def spatio_temporal_event_conv(
+        features: FloatTensor,
+        dt: Union[tf.SparseTensor, Iterable[tf.SparseTensor]],
+        kernel: FloatTensor, decay: FloatTensor) -> FloatTensor:
     """
     Event convolution.
 
@@ -86,7 +192,7 @@ def spatio_temporal_event_conv(features: FloatTensor,
 
     Args:
         features: [n_in, f_in] float tensor of input event features.
-        dt: rank-3 `SpareTensor` with `dense_shape` [u, n_out, n_in] and values
+        dt: rank-3 `SpareTensor` with `dense_shape` [sk, n_out, n_in] and values
             of non-negative time differences.
         kernel: [sk, tk, f_in, f_out] kernel weights.
         decay: [sk, tk] decay weights in units per-time.
@@ -95,17 +201,32 @@ def spatio_temporal_event_conv(features: FloatTensor,
         [n_out, f_out] output features.
     """
     decay.shape.assert_has_rank(2)
+    kernel.shape.assert_has_rank(4)
     assert (decay.dtype.is_floating)
-
     sk = decay.shape[0]
     assert (sk is not None)
-    kernel.shape.assert_has_rank(4)
-    assert (kernel.shape[2] == features.shape[1])
+
     assert (kernel.shape[0] == sk)
     assert (kernel.dtype.is_floating)
 
     assert (kernel.shape[:2] == decay.shape)
+    assert (kernel.shape[-2] == features.shape[-1])
+    features.shape.assert_has_rank(2)
 
+    dt_ = _split_spatial_dt(dt, sk)
+
+    # implementation start
+    kernel = tf.unstack(kernel, axis=0)
+    decay = tf.unstack(decay, axis=0)
+    terms = [
+        temporal_event_conv(features, *args, validate=False)
+        for args in zip(dt_, kernel, decay)
+    ]
+    return tf.add_n(terms)
+
+
+def _split_spatial_dt(dt: Union[tf.SparseTensor, Iterable[tf.SparseTensor]],
+                      sk: int):
     # arg checking
     if isinstance(dt, tf.SparseTensor):
         # assert (dt.dtype.is_floating)
@@ -114,9 +235,9 @@ def spatio_temporal_event_conv(features: FloatTensor,
         shape = getattr(dt, 'shape')
         if shape.ndims == 4:
             # remove batch dim
-            dt = sparse_ops.remove_dim(dt)
+            dt = sparse_ops.remove_leading_dim(dt)
         else:
-            shape.assert_has_rank(3)  # make pyright shut up
+            shape.assert_has_rank(3)
         dt_ = sparse_ops.unstack(dt, num_partitions=sk)
     elif isinstance(dt, tf.Tensor):
         raise ValueError('dense dt not supported')
@@ -127,21 +248,11 @@ def spatio_temporal_event_conv(features: FloatTensor,
             shape = d.shape
             if shape.ndims == 3:
                 # remove batch dim
-                d = sparse_ops.remove_dim(d)
+                d = sparse_ops.remove_leading_dim(d)
             else:
                 shape.assert_has_rank(2)
             assert (d.dtype.is_floating)
             dt_.append(d)
     else:
         raise ValueError('Unrecognized dt type {}'.format(dt))
-    sk = len(dt_)
-    features.shape.assert_has_rank(2)
-
-    # implementation start
-    kernel = tf.unstack(kernel, axis=0)
-    decay = tf.unstack(decay, axis=0)
-    terms = [
-        temporal_event_conv(features, *args, skip_dynamic_checks=True)
-        for args in zip(dt_, kernel, decay)
-    ]
-    return tf.add_n(terms)
+    return dt_

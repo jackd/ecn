@@ -7,8 +7,8 @@ kernel_shape = np.array((3, 3), dtype=np.int64)
 strides = np.array((2, 2), dtype=np.int64)
 padding = np.array((1, 1), dtype=np.int64)
 
-indices, splits, shape = grid.sparse_neighborhood(in_shape, kernel_shape,
-                                                  strides, padding)
+p, indices, splits, shape = grid.sparse_neighborhood(in_shape, kernel_shape,
+                                                     strides, padding)
 print(shape)
 print(indices)
 print(splits)

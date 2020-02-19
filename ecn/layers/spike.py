@@ -26,14 +26,16 @@ def _spike_threshold(args, **kwargs):
 
 def spike_threshold(times: IntTensor,
                     coords: IntTensor,
+                    grid_indices: IntTensor,
+                    grid_splits: IntTensor,
                     decay_time: int,
                     threshold: float = -1.,
                     reset_potential: float = -1.,
-                    max_out_events: int = -1) -> Tuple[IntTensor, IntTensor]:
+                    out_size: int = -1) -> Tuple[IntTensor, IntTensor]:
     return Lambda(_spike_threshold,
                   arguments=dict(
                       decay_time=decay_time,
                       threshold=threshold,
                       reset_potential=reset_potential,
-                      max_out_events=max_out_events,
-                  ))([times, coords])
+                      out_size=out_size,
+                  ))([times, coords, grid_indices, grid_splits])

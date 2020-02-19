@@ -1,23 +1,23 @@
 # import os
 # os.environ['NUMBA_DISABLE_JIT'] = '1'
-
-import numpy as np
 import tensorflow as tf
-from ecn.np_utils import spike
-from ecn.np_utils import neighbors as neigh
-from ecn.np_utils import grid
-import ecn.np_utils.ragged as ragged
-# from ecn.np_utils import conv
-from events_tfds.events.nmnist import NMNIST
+import numpy as np
+import collections
 from events_tfds.vis.image import as_frames
 import events_tfds.vis.anim as anim
-
 from scipy.sparse import coo_matrix
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
+from ecn.ops import spike
+from ecn.ops import neighbors as neigh
+from ecn.ops import ragged
+from ecn.ops import grid
+# from ecn.np_utils import conv
+from events_tfds.events.nmnist import NMNIST
 
-def vis_adjacency(indices, split, in_times, out_times, decay_time):
+
+def vis_adjacency(indices, splits, in_times, out_times, decay_time):
     _, (ax0, ax1, ax2) = plt.subplots(3, 1)
     row_lengths = splits[1:] - splits[:-1]
     i = np.repeat(np.arange(row_lengths.size), row_lengths, axis=0)
@@ -61,6 +61,7 @@ def vis_graph(coords, time, out_coords, out_time, indices, splits, n=10):
     out_y = np.repeat(out_coords[:, 1], row_lengths, axis=0)
     out_t = np.repeat(out_time, row_lengths, axis=0)
     out_xyz = np.stack((out_x, out_y, out_t), axis=-1)
+    # print(out_xyz[:, :2] - in_xyz[:, :2])
 
     segs = np.stack((in_xyz, out_xyz), axis=-2)
     assert (segs.shape[1:] == (2, 3))
@@ -68,134 +69,161 @@ def vis_graph(coords, time, out_coords, out_time, indices, splits, n=10):
     ax.add_collection(Line3DCollection(segs))
 
 
-stride = 2
+ds_kwargs = dict(
+    strides=np.array((2, 2)),
+    kernel_shape=np.array((5, 5)),
+    padding=np.array((2, 2)),
+)
+ip_kwargs = dict(
+    strides=np.array((1, 1)),
+    kernel_shape=np.array((3, 3)),
+    padding=np.array((1, 1)),
+)
 
-dataset = NMNIST().as_dataset(split='train', as_supervised=True)
-frame_kwargs = dict(num_frames=20)
-all_event_counts = []
+GRID_SHAPE = (34, 34)
+NUM_LEVELS = 3
+spike_kwargs = dict(reset_potential=-1.,)
+DECAY_TIME = 12500
+NUM_FRAMES = 20
+FPS = 4
+SPATIAL_BUFFER = 32
 
-for events, label in dataset.take(100):
-    decay_time = 7500
-    event_duration = decay_time * 4
-    spatial_buffer_size = 32
-    in_shape = np.array((34, 34))
+ConvSpec = collections.namedtuple('ConvSpec',
+                                  ['kernel_shape', 'strides', 'padding'])
 
-    coords = events['coords'].numpy()
-    time = events['time'].numpy()
-    polarity = events['polarity'].numpy()
+SPECS = (
+    ConvSpec((3, 3), (1, 1), (0, 0)),
+    ConvSpec((5, 5), (2, 2), (2, 2)),
+    ConvSpec((5, 5), (2, 2), (2, 2)),
+)
 
-    print('{} events over {} dt'.format(time.size, np.max(time) - np.min(time)))
+THRESHOLDS = (1., 2., 2.)
 
-    coords_1d = grid.ravel_multi_index_transpose(coords, in_shape)
-    img_data = [as_frames(coords, time, polarity, **frame_kwargs)]
-    sizes = [time.size]
-    spike_kwargs = dict(threshold=2., reset_potential=-2.)
-    neigh_kwargs = dict(kernel_shape=np.array((3, 3)),
-                        strides=np.array((2, 2)),
-                        padding=np.array((0, 0)))
 
-    for i in range(2):
-        print('-------------')
-        print('---LAYER {}---'.format(i))
-        p, neigh_indices, splits, out_shape = grid.sparse_neighborhood(
-            in_shape, **neigh_kwargs)
-        neigh_indices_T, splits_T = ragged.transpose_csr(neigh_indices, splits)
+def process_events(times, coords, polarity):
+    print('{} events over {} ms'.format(times.shape[0],
+                                        (times[-1] - times[0]).numpy()))
+    decay_time = DECAY_TIME
+    spatial_buffer_size = SPATIAL_BUFFER
 
-        out_time, out_coords_1d = spike.spike_threshold_1d(
-            time,
-            coords_1d,
+    event_sizes = [times.shape[0]]
+    img_data = [
+        as_frames(coords.numpy(),
+                  [0, 1] if times.shape[0] == 0 else times.numpy(),
+                  polarity.numpy(),
+                  num_frames=NUM_FRAMES,
+                  shape=GRID_SHAPE[-1::-1])
+    ]
+    neigh_sizes = []
+    mean_neigh_sizes = []
+
+    shape = tf.constant(GRID_SHAPE, dtype=tf.int64)
+    shaped_in_coords = coords
+    coords = grid.ravel_multi_index(coords, shape)
+
+    for spec, thresh in zip(SPECS, THRESHOLDS):
+        partitions, indices, splits, out_shape = grid.sparse_neighborhood(
+            shape, *spec)
+
+        # resample
+        indices_T, splits_T, _ = ragged.transpose_csr(indices, splits,
+                                                      partitions)
+        out_times, out_coords = spike.spike_threshold(
+            times,
+            coords,
+            grid_indices=indices_T,
+            grid_splits=splits_T,
             decay_time=decay_time,
-            neigh_indices=neigh_indices_T,
-            neigh_splits=splits_T,
-            **spike_kwargs,
-        )
-        out_coords = grid.unravel_index_transpose(out_coords_1d, out_shape)
-        out_events = out_time.size
-        print('events {}: {}'.format(i, out_events))
-        sizes.append(out_events)
+            threshold=thresh,
+            out_size=tf.math.reduce_prod(out_shape).numpy(),
+            **spike_kwargs)
+        event_sizes.append(out_times.shape[0])
 
-        # partitions, indices, splits = neigh.compute_neighbors_nd(
-        #     time,
-        #     coords.copy(),
-        #     out_time,
-        #     out_coords * stride,
-        #     neighbor_offsets=neigh.neighbor_offsets((stride, stride)),
-        #     event_duration=event_duration,
-        #     spatial_buffer_size=spatial_buffer_size,
-        # )
-        # mask = np.zeros((time.size,), dtype=np.bool)
-        # mask[indices] = True
-        # ri = neigh.reindex_index(mask)
-        # indices0 = neigh.reindex(indices, ri)
-        # print('events: ', np.count_nonzero(mask), time.size)
+        shaped_out_coords = grid.unravel_index_transpose(out_coords, out_shape)
+        img_data.append(
+            as_frames(shaped_out_coords.numpy(),
+                      [0, 1] if times.shape[0] == 0 else out_times.numpy(),
+                      num_frames=NUM_FRAMES,
+                      shape=out_shape.numpy()[-1::-1]))
 
-        # vis_graph(coords,
-        #           time,
-        #           out_coords * stride + 0.5,
-        #           out_time,
-        #           indices,
-        #           splits,
-        #           n=10)
-        # vis_adjacency(indices, splits, time, out_time, decay_time)
-        # plt.show()
+        # resample conv
+        neigh_part, neigh_indices, neigh_splits = neigh.compute_neighbors(
+            in_times=times,
+            in_coords=coords,
+            out_times=out_times,
+            out_coords=out_coords,
+            grid_indices=indices,
+            grid_partitions=partitions,
+            grid_splits=splits,
+            event_duration=decay_time * 4,
+            spatial_buffer_size=spatial_buffer_size)
+        del neigh_part
 
-        # print('neighbors {}: {}'.format(i, indices.size))
+        # neigh_indices, neigh_splits = ragged.mask_rows(neigh_indices,
+        #                                                neigh_splits,
+        #                                                neigh_part == 1)
 
-        # decay_time *= 2
-        # event_duration *= 2
-        # spatial_buffer_size //= 2
+        neigh_sizes.append(neigh_indices.shape[0])
+        mean_neigh_sizes.append(neigh_indices.shape[0] / out_times.shape[0])
 
-        # # in place
-        # partitions, indices, splits = neigh.compute_neighbors_nd(
-        #     out_time,
-        #     out_coords.copy(),
-        #     out_time,
-        #     out_coords.copy(),
-        #     neighbor_offsets=neigh.neighbor_offsets((3, 3)),
-        #     event_duration=event_duration,
-        #     spatial_buffer_size=spatial_buffer_size)
+        # vis_adjacency(neigh_indices.numpy(), neigh_splits.numpy(),
+        #               times.numpy(), out_times.numpy(), decay_time)
+        vis_graph(shaped_in_coords.numpy(),
+                  times.numpy(),
+                  grid.shift_grid_coords(shaped_out_coords, *spec).numpy(),
+                  out_times.numpy(),
+                  neigh_indices.numpy(),
+                  neigh_splits.numpy(),
+                  n=10)
 
-        # vis_graph(out_coords,
-        #           out_time,
-        #           out_coords,
-        #           out_time,
-        #           indices,
-        #           splits,
-        #           n=10)
-        # vis_adjacency(indices, splits, out_time, out_time, decay_time)
-        # plt.show()
+        # in-place conv
+        partitions, indices, splits = grid.sparse_neighborhood_in_place(
+            out_shape, (3, 3))
+        neigh_part, neigh_indices, neigh_splits = neigh.compute_neighbors(
+            out_times,
+            out_coords,
+            out_times,
+            out_coords,
+            grid_partitions=partitions,
+            grid_indices=indices,
+            grid_splits=splits,
+            event_duration=decay_time * 8,
+            spatial_buffer_size=spatial_buffer_size)
 
-        time = out_time
-        coords_1d = out_coords_1d
-        in_shape = out_shape
+        neigh_sizes.append(neigh_indices.shape[0])
+        mean_neigh_sizes.append(neigh_indices.shape[0] / out_times.shape[0])
 
-        img_data.append(as_frames(out_coords, time, **frame_kwargs))
+        # vis_adjacency(neigh_indices.numpy(), neigh_splits.numpy(),
+        #               times.numpy(), out_times.numpy(), decay_time * 2)
 
-    global_times = spike.global_spike_threshold(
-        time,
-        decay_time=decay_time,
-        **spike_kwargs,
-    )
+        vis_graph(
+            shaped_out_coords.numpy(),
+            out_times.numpy(),
+            shaped_out_coords.numpy(),
+            #   grid.shift_grid_coords(shaped_out_coords, (3, 3), (1, 1),
+            #                          (1, 1)).numpy(),
+            out_times.numpy(),
+            neigh_indices.numpy(),
+            neigh_splits.numpy(),
+            n=10)
 
-    print('-------------')
-    print('---GLOBAL----')
-    global_events = global_times.size
-    print('events: {}'.format(global_events))
-    max_neighbors = 32
-    global_indices, global_splits = neigh.compute_global_neighbors(
-        time,
-        global_times,
-        event_duration=event_duration,
-        max_neighbors=max_neighbors)
-    global_indices = global_indices[:global_splits[-1]]
-    print('max_neighbors: {} / {}'.format(global_splits[-1], max_neighbors))
+        plt.show()
+        decay_time *= 2
+        shape = out_shape
+        coords = out_coords
+        shaped_in_coords = shaped_out_coords
+        times = out_times
 
-    coords = np.zeros((global_events, 2), dtype=np.int64)
-    img_data.append(as_frames(coords, global_times, **frame_kwargs))
-    sizes.append(global_events)
-    print(sizes)
-    all_event_counts.append(sizes)
+    print('event sizes: ', event_sizes)
+    print('neigh sizes: ', neigh_sizes)
+    print('mean degree: ',
+          ' '.join(['{:.2f}'.format(s) for s in mean_neigh_sizes]))
+    anim.animate_frames_multi(*img_data, fps=FPS)
 
-    anim.animate_frames_multi(*img_data, fps=4)
 
-print(np.mean(all_event_counts, axis=0))
+shape = GRID_SHAPE
+for events, label in NMNIST().as_dataset(split='train', as_supervised=True):
+    times = events['time']
+    coords = events['coords']
+    polarity = events['polarity']
+    process_events(events['time'], events['coords'], events['polarity'])

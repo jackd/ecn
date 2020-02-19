@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Optional
 from .utils import PARALLEL
 import numpy as np
 import numba as nb
@@ -53,10 +53,9 @@ def row_sum(values: IntArray, splits: IntArray, out=None) -> IntArray:
 
 
 @nb.njit(inline='always')
-def row_sorted(row_indices: IntArray,
-               col_indices: IntArray) -> Tuple[IntArray, IntArray]:
+def row_sorted(row_indices: IntArray, col_indices: IntArray, values: IntArray):
     order = np.argsort(row_indices)
-    return row_indices[order], col_indices[order]
+    return row_indices[order], col_indices[order], values[order]
 
 
 @nb.njit(inline='always')
@@ -79,33 +78,31 @@ def col_sort(values, splits) -> None:
 
 
 @nb.njit(inline='always')
-def transpose_csr(indices: IntArray,
-                  splits: IntArray) -> Tuple[IntArray, IntArray]:
+def transpose_csr(indices: IntArray, splits: IntArray,
+                  values: np.ndarray) -> Tuple[IntArray, IntArray, np.ndarray]:
     col_indices = splits_to_ids(splits)  # initial row indices
-    row_indices, col_indices = row_sorted(indices, col_indices)
-    return col_indices, ids_to_splits(row_indices)
+    row_indices, col_indices, values = row_sorted(indices, col_indices, values)
+    return col_indices, ids_to_splits(row_indices), values
+
+
+@nb.njit(inline='always', parallel=PARALLEL)
+def ragged_broadcast(values: np.ndarray,
+                     row_splits: IntArray,
+                     out: Optional[np.ndarray] = None):
+    out_ = np.empty((row_splits[-1],), values.dtype) if out is None else out
+    for i in nb.prange(row_splits.size - 1):  # pylint: disable=not-an-iterable
+        out_[row_splits[i]:row_splits[i + 1]] = values[i]
+    return out_
 
 
 @nb.njit()
-def mask_rows(indices: IntArray, row_splits: IntArray,
-              mask: BoolArray) -> Tuple[IntArray, IntArray]:
-    row_lengths = row_splits[1:] - row_splits[:-1]
-    row_lengths = row_lengths[:mask.size][mask]
-    total = np.sum(row_lengths)
-    out_indices = np.zeros((total,), dtype=indices.dtype)
-    out_row_splits = np.empty((np.count_nonzero(mask) + 1,),
-                              dtype=row_splits.dtype)
-    jj = out_row_splits[0] = row_splits[0]
-    j = 0
-
-    for i in range(mask.size):
-        if mask[i]:
-            for ii in range(row_splits[i], row_splits[i + 1]):
-                out_indices[jj] = indices[ii]
-                jj += 1
-            j += 1
-            out_row_splits[j] = jj
-    return out_indices, out_row_splits
+def mask_rows(values: np.ndarray, row_splits: IntArray,
+              mask: BoolArray) -> Tuple[np.ndarray, IntArray]:
+    flat_mask = ragged_broadcast(mask, row_splits)
+    values = values[flat_mask]
+    row_lengths = splits_to_lengths(row_splits)
+    splits = lengths_to_splits(row_lengths[mask])
+    return values, splits
 
 
 # class RaggedArray(object):

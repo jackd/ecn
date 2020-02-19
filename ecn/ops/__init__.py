@@ -1,7 +1,13 @@
-from ecn.ops.conv import spatio_temporal_event_conv
-from ecn.ops.conv import temporal_event_conv
+from . import conv
+from . import grid
+from . import neighbors
+from . import ragged
+from . import spike
 
 __all__ = [
-    'spatio_temporal_event_conv',
-    'temporal_event_conv',
+    'conv',
+    'grid',
+    'neighbors',
+    'ragged',
+    'spike',
 ]

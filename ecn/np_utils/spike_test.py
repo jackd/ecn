@@ -12,7 +12,7 @@ class SpikeTest(unittest.TestCase):
         actual = spike.global_spike_threshold(times, 5, 2, -2)
         np.testing.assert_equal(actual, [2, 112])
 
-    def test_spike_1d(self):
+    def test_spike(self):
         t0 = np.array([0, 1, 2, 3, 4, 100, 110, 111, 112, 113], dtype=np.int64)
         t1 = t0[:8] + 2
         c0 = np.expand_dims(np.zeros_like(t0), axis=-1)
@@ -21,10 +21,10 @@ class SpikeTest(unittest.TestCase):
         times, coords = utils.merge(t0, c0, t1, c1)
         coords = np.squeeze(coords, axis=-1)
         kwargs = dict(decay_time=5, threshold=2, reset_potential=-2)
-        actual_t, actual_c = spike.spike_threshold_1d(
+        actual_t, actual_c = spike.spike_threshold(
             times,
             coords,
-            neigh_indices=np.array([0, 1]),
+            neigh_coords=np.array([0, 1]),
             neigh_splits=np.array([0, 1, 2]),
             **kwargs)
 
@@ -38,5 +38,5 @@ class SpikeTest(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    # unittest.main()
-    SpikeTest().test_spike_1d()
+    unittest.main()
+    # SpikeTest().test_spike()

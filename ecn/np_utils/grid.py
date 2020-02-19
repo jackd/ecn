@@ -168,49 +168,60 @@ def ravel_multi_index_transpose(indices: IntArray, dims):
 #             start_index = stop_index
 #         return start_index
 
+# @nb.njit(inline='always')
+# def neighbor_offsets(kernel_shape: IntArray):
+#     """
+#     Get neighborhood offsets associated with rectangle centered at the origin.
 
-@nb.njit(inline='always')
-def neighbor_offsets(kernel_shape: IntArray):
-    """
-    Get neighborhood offsets associated with rectangle centered at the origin.
+#     e.g.
+#     ```python
+#     neighbor_offsets((3, 3)) == [
+#         [-1, -1],
+#         [-1, 0],
+#         [-1, 1],
+#         [0, -1],
+#         [0, 0],
+#         [0, 1],
+#         [1, -1],
+#         [1, 0],
+#         [1, 1],
+#     ]
+#     ```
+#     """
+#     # p = 1
+#     # for k in kernel_shape:
+#     #     p *= k
 
-    e.g.
-    ```python
-    neighbor_offsets((3, 3)) == [
-        [-1, -1],
-        [-1, 0],
-        [-1, 1],
-        [0, -1],
-        [0, 0],
-        [0, 1],
-        [1, -1],
-        [1, 0],
-        [1, 1],
-    ]
-    ```
-    """
-    # p = 1
-    # for k in kernel_shape:
-    #     p *= k
-
-    # out = np.empty((p, len(kernel_shape)), dtype=dtype)
-    # _neighbor_offsets(kernel_shape, out)
-    # return out
-    values = unravel_index_transpose(np.arange(utils.prod(kernel_shape)),
-                                     kernel_shape)
-    return values - ((kernel_shape - 1) // 2)
+#     # out = np.empty((p, len(kernel_shape)), dtype=dtype)
+#     # _neighbor_offsets(kernel_shape, out)
+#     # return out
+#     values = base_grid_coords(kernel_shape)
+#     return values - ((kernel_shape - 1) // 2)
 
 
 @nb.njit()
-def grid_grid_coords(in_shape: IntArray, kernel_shape: IntArray,
-                     strides: IntArray,
-                     padding: IntArray) -> Tuple[IntArray, IntArray]:
-    out_shape = (in_shape + padding) // strides
-    out_size = utils.prod(out_shape)
-    coords = np.arange(out_size)
-    coords_nd = unravel_index_transpose(coords, out_shape)
-    coords_nd *= strides
-    coords_nd += ((kernel_shape - 1) // 2) - padding
+def base_grid_coords(shape: IntArray):
+    return unravel_index_transpose(np.arange(utils.prod(shape)), shape)
+
+
+@nb.njit()
+def grid_coords(in_shape: IntArray, kernel_shape: IntArray, strides: IntArray,
+                padding: IntArray) -> Tuple[IntArray, IntArray]:
+    """
+    Get the coordinates of the top left of each kernel region in input coords.
+
+    Args:
+        in_shape: [ndims] int
+        kernel_shape: [ndims] int
+        strides: [ndims] int
+        padding: [ndims] int
+
+    Returns:
+        coords_nd: [out_size, ndims] ints
+        out_shape: [ndims] ints
+    """
+    out_shape = (in_shape + 2 * padding - kernel_shape) // strides + 1
+    coords_nd = base_grid_coords(out_shape) * strides - padding
     return coords_nd, out_shape
 
 
@@ -219,13 +230,13 @@ def sparse_neighborhood(in_shape: IntArray, kernel_shape: IntArray,
                         strides: IntArray, padding: IntArray
                        ) -> Tuple[IntArray, IntArray, IntArray, IntArray]:
     ndim = len(in_shape)
-    coords_nd, out_shape = grid_grid_coords(in_shape, kernel_shape, strides,
-                                            padding)
-    offset = neighbor_offsets(kernel_shape)
+    coords_nd, out_shape = grid_coords(in_shape, kernel_shape, strides, padding)
+    offset = base_grid_coords(kernel_shape)
     coords_expanded = np.expand_dims(coords_nd, axis=-2) + offset
     flat_coords = np.reshape(coords_expanded, (-1, ndim))
     num_partitions = offset.shape[0]
     num_coords = flat_coords.shape[0]
+    # partitions = np.tile(np.arange(num_partitions), coords_nd.shape[0])
     partitions = np.arange(num_coords)
     partitions %= num_partitions
     valid = np.ones((num_coords,), dtype=np.bool_)
@@ -236,8 +247,8 @@ def sparse_neighborhood(in_shape: IntArray, kernel_shape: IntArray,
 
     valid_coords = flat_coords[valid]
     valid_partitions = partitions[valid]
-    indices = ravel_multi_index_transpose(valid_coords, in_shape)
+    coords_1d = ravel_multi_index_transpose(valid_coords, in_shape)
     lengths = np.count_nonzero(np.reshape(valid, (-1, offset.shape[0])),
                                axis=-1)
     splits = ragged.lengths_to_splits(lengths)
-    return valid_partitions, indices, splits, out_shape
+    return valid_partitions, coords_1d, splits, out_shape

@@ -1,0 +1,3 @@
+import ecn.problems.builders
+build_fn = @ecn.builders.simple_multi_graph
+model_id = 'simple'

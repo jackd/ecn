@@ -38,9 +38,11 @@ class RaggedTest(unittest.TestCase):
     def test_transpose_csr(self):
         i = np.array([0, 1, 1, 2, 2, 2, 3, 5])
         j = np.array([1, 0, 2, 1, 2, 3, 1, 4])
+        values = np.arange(8)
         splits = ragged.ids_to_splits(i)
 
-        actual_indices, actual_splits = ragged.transpose_csr(j, splits)
+        actual_indices, actual_splits, actual_values = ragged.transpose_csr(
+            j, splits, values)
         # expected_j = [0, 1, 1, 1, 2, 2, 3, 4]
         expected_splits = [0, 1, 4, 6, 7, 8]
         np.testing.assert_equal(actual_splits, expected_splits)
@@ -48,6 +50,7 @@ class RaggedTest(unittest.TestCase):
         ragged.col_sort(actual_indices, actual_splits)
         expected_i = [1, 0, 2, 3, 1, 2, 2, 5]
         np.testing.assert_equal(actual_indices, expected_i)
+        np.testing.assert_equal(actual_values, [1, 0, 3, 6, 2, 4, 5, 7])
 
     def test_mask_ragged_rows(self):
         np.random.seed(123)
@@ -79,4 +82,5 @@ class RaggedTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+    # RaggedTest().test_mask_ragged_rows()
     # RaggedTest().test_transpose_csr()
