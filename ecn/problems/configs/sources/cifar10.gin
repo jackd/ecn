@@ -1,0 +1,7 @@
+import ecn.problems.sources
+base_source = @cifar10_dvs_source()
+batch_size = 4
+epochs = 100
+TfConfig.jit = False
+
+problem_id = 'cifar10'

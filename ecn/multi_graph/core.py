@@ -441,6 +441,9 @@ class MultiGraphBuilder(MultiGraphContext):
             raise ValueError('x is part of post_batch_graph')
 
     def batch(self, x: TensorLike) -> TensorLike:
+        if isinstance(x,
+                      tf.Tensor) and x.shape.ndims > 0 and x.shape[0] is None:
+            raise ValueError('Cannot batch tensor with unknown first dimension')
         self._pre_batch_builder.add_output(x)
         with self._post_batch_builder:
             out = _batched_placeholder_like(x)

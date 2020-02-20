@@ -99,7 +99,6 @@ def temporal_event_conv(features: FloatTensor,
     if dt.dense_shape.shape[0] == 3:
         # remove batch dim
         dt = sparse_ops.remove_dim(dt, axis=0)
-
     assert (dt.dense_shape.shape[0] == 2)
     kernel.shape.assert_has_rank(3)
     assert (dt.dense_shape.shape[0] == 2)

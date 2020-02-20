@@ -1,4 +1,4 @@
-import ecn.problems.nmnist
+import ecn.problems.sources
 
 base_source = @nmnist_source()
 batch_size = 32

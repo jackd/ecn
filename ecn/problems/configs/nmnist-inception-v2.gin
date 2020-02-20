@@ -1,0 +1,5 @@
+include 'nmnist-inception.gin'
+include 'misc/lrd.gin'
+inception_multi_graph.dropout_rate = 0.5
+
+variant_id = 'v2'

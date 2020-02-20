@@ -528,23 +528,23 @@ class Convolver(Generic[S0, S1]):
                 tf.gather(out_stream.times, rowids) -
                 tf.gather(in_stream.times, self._indices),
                 tf.float32) / self.decay_time
-            dt = tf.SparseTensor(tf.stack((rowids, self._indices), axis=-1), dt,
-                                 (-1, -1))
+            indices = tf.stack((rowids, self._indices), axis=-1)
+            # indices = tf.cast(indices, tf.int32)
+            dt = tf.SparseTensor(indices, dt, (-1, -1))
 
         with mg.post_batch_context():
             dt = mg.batch(dt)
             batch_size = dt.dense_shape[0]
 
             dense_shape = tf.stack(
-                (batch_size, out_stream.batched_size, in_stream.batched_size),
-                axis=0)
+                (out_stream.batched_size, in_stream.batched_size), axis=0)
 
             # block diagonalize
             b, i, j = tf.unstack(dt.indices, axis=-1)
             i = i + tf.gather(out_stream.row_starts, b)
             j = j + tf.gather(in_stream.row_starts, b)
 
-            dt = tf.SparseTensor(tf.stack((b, i, j), axis=-1), dt.values,
+            dt = tf.SparseTensor(tf.stack((i, j), axis=-1), dt.values,
                                  dense_shape)
             return (dt,)
 
@@ -561,51 +561,52 @@ class Convolver(Generic[S0, S1]):
             # don't divide dt here so we can stack later before partitioning
             dt = (tf.gather(out_stream.times, rowids) -
                   tf.gather(in_stream.times, self._indices))
-            dt = tf.SparseTensor(
-                tf.stack((rowids, self._indices, self._partitions), axis=-1),
-                dt, (-1, -1, num_partitions))
+            ijts = tf.dynamic_partition(
+                tf.stack((rowids, self._indices, dt), axis=-1),
+                tf.cast(self._partitions, tf.int32), num_partitions)
+            dts = []
+            for ijt in ijts:
+                ij, dt = tf.split(ijt, [2, 1], axis=-1)
+                dt = (tf.cast(tf.squeeze(dt, axis=-1), tf.float32) /
+                      self._decay_time)
+                # ij = tf.cast(ij, tf.int32)
+                dts.append(tf.SparseTensor(ij, dt, (-1, -1)))
 
         with mg.post_batch_context():
-            dt = mg.batch(dt)
-            batch_size = dt.dense_shape[0]
             batched_dts = []
-
-            # block diagonalize
-            b, i, j, p = tf.unstack(tf.identity(dt.indices), axis=-1)
-            i = i + tf.gather(out_stream.row_starts, b)
-            j = j + tf.gather(in_stream.row_starts, b)
-
-            # partition
-            bijt = tf.dynamic_partition(
-                tf.stack((b, i, j, tf.identity(dt.values)), axis=-1),
-                tf.cast(p, tf.int32), num_partitions)
+            dts = [mg.batch(dt) for dt in dts]
+            # batch_size = dts[0].dense_shape[0]
             dense_shape = tf.stack(
-                (batch_size, out_stream.batched_size, in_stream.batched_size),
-                axis=0)
-            batched_dts = []
-            del dt
-            for partitioned in bijt:
-                bij, dt = tf.split(partitioned, [3, 1], axis=-1)
-                dt = tf.cast(tf.squeeze(dt, axis=-1),
-                             tf.float32) / self._decay_time
-                batched_dts.append(tf.SparseTensor(bij, dt, dense_shape))
+                (out_stream.batched_size, in_stream.batched_size), axis=0)
+            for dt in dts:
+                # block diagonalize
+                b, i, j = tf.unstack(dt.indices, axis=-1)
+                i = i + tf.gather(out_stream.row_starts, b)
+                j = j + tf.gather(in_stream.row_starts, b)
+                # bij = tf.stack((b, i, j), axis=-1)
+                bij = tf.stack((i, j), axis=-1)
+
+                batched_dts.append(tf.SparseTensor(bij, dt.values, dense_shape))
             return tuple(batched_dts)
 
     @property
     def model_dts(self):
         if self._model_dts is None:
+            # self._model_dts = tuple(
+            #     tf.keras.layers.Lambda(sparse_ops.remove_leading_dim)(
+            #         mg.model_input(dt)) for dt in self.batched_dts)
             self._model_dts = tuple(
-                tf.keras.layers.Lambda(sparse_ops.remove_leading_dim)(
-                    mg.model_input(dt)) for dt in self.batched_dts)
+                mg.model_input(dt) for dt in self.batched_dts)
         return self._model_dts
 
     def convolve(self, features: tf.Tensor, filters: int,
                  temporal_kernel_size: int, **kwargs):
         mg.assert_is_model_tensor(features)
         if self.num_partitions == 1:
+            assert (len(self.model_dts) == 1)
             return conv_layers.temporal_event_conv(
                 features=features,
-                dt=self.model_dts,
+                dt=self.model_dts[0],
                 filters=filters,
                 temporal_kernel_size=temporal_kernel_size,
                 **kwargs)
