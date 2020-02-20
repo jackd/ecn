@@ -599,7 +599,7 @@ class Convolver(Generic[S0, S1]):
                 mg.model_input(dt) for dt in self.batched_dts)
         return self._model_dts
 
-    def convolve(self, features: tf.Tensor, filters: int,
+    def convolve(self, features: Optional[tf.Tensor], filters: int,
                  temporal_kernel_size: int, **kwargs):
         mg.assert_is_model_tensor(features)
         if self.num_partitions == 1:

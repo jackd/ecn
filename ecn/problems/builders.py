@@ -7,6 +7,109 @@ from ecn import components as comp
 
 
 @gin.configurable(module='ecn.builders')
+def simple1d_graph(features,
+                   labels,
+                   weights=None,
+                   num_classes=11,
+                   grid_shape=(64,),
+                   decay_time=10000,
+                   filters0=32,
+                   spatial_buffer=32,
+                   reset_potential=-2.0,
+                   threshold=1.0,
+                   kt0=8,
+                   dropout_rate=0.5,
+                   hidden_units=(256,)):
+    times = features['time']
+    channels = features['channel']
+    spike_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
+    filters = filters0
+    grid = comp.Grid(grid_shape)
+
+    in_stream = comp.SpatialStream(grid, times, channels)
+    features = None
+    for _ in range(3):
+        # in-place
+        link = grid.link((9,), (1, 1), (4, 4))
+        out_stream = comp.spike_threshold(in_stream,
+                                          decay_time=decay_time,
+                                          min_mean_size=None,
+                                          **spike_kwargs)
+
+        convolver = comp.spatio_temporal_convolver(
+            link,
+            in_stream,
+            out_stream,
+            decay_time=decay_time,
+            spatial_buffer_size=spatial_buffer)
+
+        features = convolver.convolve(features,
+                                      filters=filters,
+                                      temporal_kernel_size=kt0,
+                                      activation='relu')
+        features = layers.BatchNormalization()(features)
+        in_stream = out_stream
+        decay_time *= 2
+        features *= 2
+        link = grid.link((9,), (2, 2), (4, 4))
+        out_stream = comp.spike_threshold(in_stream,
+                                          decay_time=decay_time,
+                                          min_mean_size=None,
+                                          **spike_kwargs)
+
+        convolver = comp.spatio_temporal_convolver(
+            link,
+            in_stream,
+            out_stream,
+            decay_time=decay_time,
+            spatial_buffer_size=spatial_buffer)
+
+        features = convolver.convolve(features,
+                                      filters=filters,
+                                      temporal_kernel_size=kt0,
+                                      activation='relu')
+        features = layers.BatchNormalization()(features)
+        features = layers.Dropout(dropout_rate)(features)
+        in_stream = out_stream
+
+    global_stream = comp.global_spike_threshold(in_stream,
+                                                decay_time=decay_time,
+                                                min_mean_size=32,
+                                                **spike_kwargs)
+    flat_convolver = comp.flatten_convolver(in_stream, global_stream,
+                                            decay_time)
+    features = flat_convolver.convolve(features,
+                                       filters=filters,
+                                       temporal_kernel_size=kt0,
+                                       activation='relu')
+    features = layers.BatchNormalization()(features)
+    decay_time *= 2
+    filters *= 2
+    temporal_convolver = comp.temporal_convolver(global_stream, global_stream,
+                                                 decay_time)
+    features = temporal_convolver.convolve(features,
+                                           filters=filters,
+                                           temporal_kernel_size=kt0 * 2,
+                                           activation='relu')
+    features = layers.BatchNormalization()(features)
+    features = layers.Dropout(dropout_rate)(features)
+    for h in hidden_units:
+        features = layers.Dense(h, activation='relu')(features)
+        features = layers.BatchNormalization()(features)
+        features = layers.Dropout(dropout_rate)(features)
+    logits = layers.Dense(num_classes, activation=None, name='stream')(features)
+    final_logits = tf.keras.layers.Lambda(
+        lambda args: tf.gather(*args),
+        name='final')([logits, global_stream.model_row_ends])
+
+    outputs = (final_logits, logits)
+
+    labels = global_stream.prepare_labels(labels)
+    weights = global_stream.prepare_weights(weights)
+    return outputs, labels, weights
+
+
+@gin.configurable(module='ecn.builders')
 def simple_multi_graph(features,
                        labels,
                        weights=None,
@@ -15,7 +118,7 @@ def simple_multi_graph(features,
                        decay_time=10000,
                        spatial_buffer=32,
                        reset_potential=-2.0,
-                       threshold=1.1,
+                       threshold=1.0,
                        filters0: int = 32,
                        kt0: int = 4,
                        hidden_units: Sequence[int] = (128,),

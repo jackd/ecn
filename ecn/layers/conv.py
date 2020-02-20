@@ -218,6 +218,30 @@ class SpatioTemporalEventConv(EventConvBase):
 
 
 @gin.configurable(module='ecn.layers')
+class FeaturelessSpatioTemporalEventConv(SpatioTemporalEventConv):
+
+    def _kernel_shape(self, input_shape):
+        self._validate_kernel_size((None, *input_shape))
+        return (self.spatial_kernel_size, self.temporal_kernel_size,
+                self.filters)
+
+    def _decay_shape(self, input_shape):
+        self._validate_kernel_size((None, *input_shape))
+        return (self.spatial_kernel_size, self.temporal_kernel_size)
+
+    def call(self, inputs):
+        dt = inputs
+        if len(dt) == 1:
+            dt, = dt
+        features = conv_ops.featureless_spatio_temporal_event_conv(
+            dt=dt,
+            kernel=self.kernel,
+            decay=self.decay,
+        )
+        return self._finalize(features)
+
+
+@gin.configurable(module='ecn.layers')
 class BinarySpatioTemporalEventConv(SpatioTemporalEventConv):
 
     def _kernel_shape(self, input_shape):
@@ -236,6 +260,25 @@ class BinarySpatioTemporalEventConv(SpatioTemporalEventConv):
             dt, = dt
         features = conv_ops.binary_spatio_temporal_event_conv(
             features=features,
+            dt=dt,
+            kernel=self.kernel,
+            decay=self.decay,
+        )
+        return self._finalize(features)
+
+
+@gin.configurable(module='ecn.layers')
+class FeaturelessTemporalEventConv(EventConvBase):
+
+    def _kernel_shape(self, input_shape):
+        return (self.temporal_kernel_size, self.filters)
+
+    def _decay_shape(self, input_shape):
+        return (self.temporal_kernel_size,)
+
+    def call(self, inputs):
+        dt = inputs
+        features = conv_ops.featureless_temporal_event_conv(
             dt=dt,
             kernel=self.kernel,
             decay=self.decay,
@@ -285,7 +328,7 @@ class TemporalEventConv(EventConvBase):
 
 
 def spatio_temporal_event_conv(
-        features: tf.Tensor,
+        features: Optional[tf.Tensor],
         dt: Union[tf.SparseTensor, Iterable[tf.SparseTensor]],
         filters: int,
         temporal_kernel_size: int,
@@ -293,6 +336,8 @@ def spatio_temporal_event_conv(
 ) -> FloatTensor:
     kwargs.update(
         dict(filters=filters, temporal_kernel_size=temporal_kernel_size))
+    if features is None:
+        return FeaturelessSpatioTemporalEventConv(**kwargs)(dt)
     inputs = [features, dt] if isinstance(dt,
                                           tf.SparseTensor) else [features, *dt]
     if features.dtype.is_bool:
@@ -302,7 +347,7 @@ def spatio_temporal_event_conv(
 
 
 def temporal_event_conv(
-        features: tf.Tensor,
+        features: Optional[tf.Tensor],
         dt: Union[tf.SparseTensor, Iterable[tf.SparseTensor]],
         filters: int,
         temporal_kernel_size: int,
@@ -310,6 +355,8 @@ def temporal_event_conv(
 ) -> FloatTensor:
     kwargs.update(
         dict(filters=filters, temporal_kernel_size=temporal_kernel_size))
+    if features is None:
+        return FeaturelessTemporalEventConv(**kwargs)(dt)
     inputs = [features, dt] if isinstance(dt,
                                           tf.SparseTensor) else [features, *dt]
     if features.dtype.is_bool:

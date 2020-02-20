@@ -36,6 +36,19 @@ def cifar10_dvs_source(train_percent=90):
 
 
 @gin.configurable(module='ecn.sources')
+def ntidigits_source():
+    from events_tfds.events.ntidigits import Ntidigits
+    from events_tfds.events.ntidigits import NUM_CLASSES
+    from events_tfds.events.ntidigits import NUM_CHANNELS
+    builder = Ntidigits()
+
+    return TfdsSource(builder,
+                      split_map={'validation': 'test'},
+                      meta=dict(num_classes=NUM_CLASSES,
+                                grid_shape=(NUM_CHANNELS,)))
+
+
+@gin.configurable(module='ecn.sources')
 def vis_example(example,
                 num_frames=20,
                 fps=4,
