@@ -1,9 +1,6 @@
 import kblocks.path
 import kblocks.framework.pipelines
 import kblocks.keras.optimizers
-import kblocks.keras.layers
-import kblocks.keras.regularizers
-import ecn.layers.conv
 import ecn.problems.utils
 
 trainable = @ecn.utils.multi_graph_trainable()
@@ -38,12 +35,6 @@ ecn.utils.compile_stream_classifier.target = %target
 target = 'final'
 
 TfConfig.jit = True
-
-layers.Dense.kernel_regularizer = %l2_reg
-ecn.layers.EventConvBase.kernel_regularizer = %l2_reg
-
-l2_reg = @tf.keras.regularizers.l2()
-tf.keras.regularizers.l2.l = 4e-5
 
 # to define:
 # build_fn =

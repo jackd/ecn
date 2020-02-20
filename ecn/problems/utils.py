@@ -128,7 +128,6 @@ def vis_streams(build_fn, base_source: DataSource, num_frames=20, fps=4):
             #               shape=shape))
 
         # anim.animate_frames_multi(*img_data, fps=fps)
-<<<<<<< HEAD
 
 
 def _vis_single_adjacency(indices, splits, in_times, out_times, decay_time, ax0,
@@ -218,12 +217,3 @@ if __name__ == '__main__':
 #     source = trainable.source
 #     for example in source:
 #         pass
-=======
-
-
-if __name__ == '__main__':
-    # from ecn.problems.builders import simple_multi_graph
-    from ecn.problems.builders import inception_multi_graph
-    from ecn.problems.nmnist import nmnist_source
-    vis_streams(inception_multi_graph, nmnist_source())
->>>>>>> 6a7d4ccf87cee374ba18762d648637f28e18e8be

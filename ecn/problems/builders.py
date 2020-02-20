@@ -146,11 +146,7 @@ def inception_multi_graph(features,
                           decay_time=10000,
                           spatial_buffer=32,
                           reset_potential=-2.0,
-<<<<<<< HEAD
-                          threshold=1.,
-=======
                           threshold=1.0,
->>>>>>> 6a7d4ccf87cee374ba18762d648637f28e18e8be
                           filters0: int = 32,
                           kt0: int = 4,
                           hidden_units: Sequence[int] = (128,),
@@ -163,12 +159,8 @@ def inception_multi_graph(features,
     spike_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
 
     grid = comp.Grid(grid_shape)
-<<<<<<< HEAD
-    link = grid.link((5, 5), (1, 1), (0, 0))
-=======
     # link = grid.link((3, 3), (1, 1), (0, 0))
     link = grid.link((5, 5), (1, 1), (1, 1))
->>>>>>> 6a7d4ccf87cee374ba18762d648637f28e18e8be
 
     in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=5000)
     # in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=None)
@@ -204,11 +196,7 @@ def inception_multi_graph(features,
     t_kernel[2] = True
     t_kernel[:, 2] = True
 
-<<<<<<< HEAD
-    for min_mean_size in (256, 128):
-=======
     for min_mean_size in (512, 256):
->>>>>>> 6a7d4ccf87cee374ba18762d648637f28e18e8be
         # in place
         link = in_stream.grid.partial_self_link(t_kernel)
         t_convolver = comp.spatio_temporal_convolver(
@@ -237,7 +225,7 @@ def inception_multi_graph(features,
         branched = tf.nn.relu(ft + fp + fc)
 
         branched = layers.BatchNormalization()(branched)
-        branched = layers.Dropout(dropout_rate)(branched)
+        # branched = layers.Dropout(dropout_rate)(branched)
         features = features + branched
 
         link = in_stream.grid.link((3, 3), (2, 2), (1, 1))
@@ -277,7 +265,7 @@ def inception_multi_graph(features,
                                        temporal_kernel_size=kt0,
                                        activation='relu')
     features = layers.BatchNormalization()(features)
-    features = layers.Dropout(dropout_rate)(features)
+    # features = layers.Dropout(dropout_rate)(features)
     decay_time *= 2
     filters *= 2
     temporal_convolver = comp.temporal_convolver(global_stream, global_stream,
