@@ -1,0 +1,7 @@
+import ecn.problems.sources
+
+base_source = @ntidigits_source()
+batch_size = 32
+epochs = 100
+
+problem_id = 'ntidigits'

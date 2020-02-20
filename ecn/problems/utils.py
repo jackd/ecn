@@ -99,7 +99,11 @@ def vis_streams(build_fn, base_source: DataSource, num_frames=20, fps=4):
                 outputs.append((stream.times,))
                 static_shapes.append(None)
 
-        outputs = (tuple(outputs), inputs[0]['polarity'])
+        has_polarity = 'polarity' in inputs[0]
+        if has_polarity:
+            outputs = (tuple(outputs), inputs[0]['polarity'])
+        else:
+            outputs = tuple(outputs)
         fn = mg.subgraph(
             tf.nest.flatten(inputs,
                             expand_composites=True)[0].graph.as_graph_def(),
@@ -108,7 +112,10 @@ def vis_streams(build_fn, base_source: DataSource, num_frames=20, fps=4):
     del builder
     dataset = base_source.get_dataset('train').map(fn)
     for example in dataset:
-        streams, polarity = example
+        if has_polarity:
+            streams, polarity = example
+        else:
+            streams = example
         img_data = []
         print('Sizes: {}'.format([s[0].shape[0] for s in streams]))
         for i, (stream_data, shape) in enumerate(zip(streams, static_shapes)):
@@ -169,7 +176,9 @@ def vis_adjacency(build_fn, base_source: DataSource):
             decay_times.append(c.decay_time)
 
         fn = mg.subgraph(
-            tf.nest.flatten(inputs, expand_composites=True)[0], inputs, outputs)
+            tf.nest.flatten(inputs,
+                            expand_composites=True)[0].graph.as_graph_def(),
+            inputs, outputs)
 
     del builder
     dataset = base_source.get_dataset('train').map(fn)
@@ -198,16 +207,18 @@ if __name__ == '__main__':
     from ecn.problems import sources
 
     # build_fn = builders.simple_multi_graph
-    build_fn = builders.inception_multi_graph
-    source = sources.nmnist_source()
+    # build_fn = builders.inception_multi_graph
+    # source = sources.nmnist_source()
     # build_fn = builders.inception128_multi_graph
     # source = sources.cifar10_dvs_source()
+    build_fn = builders.simple1d_graph
+    source = sources.ntidigits_source()
 
-    multi_graph_trainable(build_fn, source, batch_size=2)
-    print('built successfully')
+    # multi_graph_trainable(build_fn, source, batch_size=2)
+    # print('built successfully')
 
     # vis_streams(build_fn, source)
-    # vis_adjacency(build_fn, source)
+    vis_adjacency(build_fn, source)
 #     from ecn.problems.nmnist import simple_multi_graph
 #     from ecn.problems.nmnist import nmnist_source
 #     trainable = multi_grpah_trainable(simple_multi_graph,

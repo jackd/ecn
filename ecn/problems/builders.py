@@ -4,6 +4,7 @@ import tensorflow as tf
 import gin
 from kblocks.keras import layers
 from ecn import components as comp
+from ecn import multi_graph as mg
 
 
 @gin.configurable(module='ecn.builders')
@@ -12,16 +13,18 @@ def simple1d_graph(features,
                    weights=None,
                    num_classes=11,
                    grid_shape=(64,),
-                   decay_time=10000,
+                   decay_time=50000,
                    filters0=32,
                    spatial_buffer=32,
-                   reset_potential=-2.0,
-                   threshold=1.0,
+                   reset_potential=-1.0,
+                   threshold=0.5,
                    kt0=8,
                    dropout_rate=0.5,
                    hidden_units=(256,)):
-    times = features['time']
     channels = features['channel']
+    with mg.post_batch_context():
+        times = tf.cast(1e6 * features['time'], tf.int64)
+        channels = tf.cast(channels, tf.int64)
     spike_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
     filters = filters0
     grid = comp.Grid(grid_shape)
@@ -30,8 +33,9 @@ def simple1d_graph(features,
     features = None
     for _ in range(3):
         # in-place
-        link = grid.link((9,), (1, 1), (4, 4))
+        link = in_stream.grid.link((9,), (1, 1), (4, 4))
         out_stream = comp.spike_threshold(in_stream,
+                                          link=link,
                                           decay_time=decay_time,
                                           min_mean_size=None,
                                           **spike_kwargs)
@@ -51,8 +55,10 @@ def simple1d_graph(features,
         in_stream = out_stream
         decay_time *= 2
         features *= 2
-        link = grid.link((9,), (2, 2), (4, 4))
+        in_stream = out_stream
+        link = in_stream.grid.link((9,), (2, 2), (4, 4))
         out_stream = comp.spike_threshold(in_stream,
+                                          link=link,
                                           decay_time=decay_time,
                                           min_mean_size=None,
                                           **spike_kwargs)
@@ -71,6 +77,8 @@ def simple1d_graph(features,
         features = layers.BatchNormalization()(features)
         features = layers.Dropout(dropout_rate)(features)
         in_stream = out_stream
+        decay_time *= 2
+        features *= 2
 
     global_stream = comp.global_spike_threshold(in_stream,
                                                 decay_time=decay_time,
