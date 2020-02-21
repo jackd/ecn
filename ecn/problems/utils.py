@@ -52,14 +52,15 @@ def get_cache_name(problem_id, model_id):
 
 
 @gin.configurable(module='ecn.utils')
-def multi_graph_trainable(build_fn: Callable,
-                          base_source: DataSource,
-                          batch_size: int,
-                          compiler=compile_stream_classifier,
-                          cache_name: Optional[str] = None,
-                          model_dir: Optional[str] = None,
-                          cached_source_kwargs={},
-                          **pipeline_kwargs):
+def multi_graph_trainable(
+        build_fn: Callable,
+        base_source: DataSource,
+        batch_size: int,
+        compiler=compile_stream_classifier,
+        #   cache_name: Optional[str] = None,
+        model_dir: Optional[str] = None,
+        #   cached_source_kwargs={},
+        **pipeline_kwargs):
 
     logging.info('Building multi graph...')
     built = mg.build_multi_graph(
@@ -67,41 +68,42 @@ def multi_graph_trainable(build_fn: Callable,
         base_source.example_spec, batch_size)
     logging.info('Successfully built!')
 
-    if built.pre_cache_map is None:
-        logging.info('No pre_cache_map - not caching')
+    # if built.pre_cache_map is None:
+    #     logging.info('No pre_cache_map - not caching')
 
-        def pre_batch_map(*args, **kwargs):
-            return built.pre_batch_map(*args, **kwargs)
-    else:
-        if cache_name is None:
-            logging.info('cache_name not given - not caching.')
+    #     def pre_batch_map(*args, **kwargs):
+    #         return built.pre_batch_map(*args, **kwargs)
+    # else:
+    #     if cache_name is None:
+    #         logging.info('cache_name not given - not caching.')
 
-            def pre_batch_map(*args, **kwargs):
-                args = built.pre_cache_map(*args, **kwargs)
-                if built.pre_batch_map is not None:
-                    args = built.pre_batch_map(*args)
-                return args
-        else:
+    #         def pre_batch_map(*args, **kwargs):
+    #             args = built.pre_cache_map(*args, **kwargs)
+    #             if built.pre_batch_map is not None:
+    #                 args = built.pre_batch_map(*args)
+    #             return args
+    # else:
 
-            def pre_cache_map(*args, **kwargs):
-                out = built.pre_cache_map(*args, **kwargs)
-                assert (isinstance(out, tuple) and
-                        all(isinstance(o, tf.Tensor) for o in out))
-                assert (o.shape.ndims is not None for o in out)
-                return {f'feature-{i:04d}': v for i, v in enumerate(out)}
+    # def pre_cache_map(*args, **kwargs):
+    #     out = built.pre_cache_map(*args, **kwargs)
+    #     assert (isinstance(out, tuple) and
+    #             all(isinstance(o, tf.Tensor) for o in out))
+    #     assert (o.shape.ndims is not None for o in out)
+    #     return {f'feature-{i:04d}': v for i, v in enumerate(out)}
 
-            def pre_batch_map(kwargs):
-                return built.pre_batch_map(*tf.nest.flatten(kwargs))
+    # def pre_batch_map(kwargs):
+    #     return built.pre_batch_map(*tf.nest.flatten(kwargs))
 
-            base_source = cached_source(
-                cache_name,
-                base_source,
-                pre_cache_map,
-                **cached_source_kwargs,
-            )
+    # base_source = cached_source(
+    #     cache_name,
+    #     base_source,
+    #     pre_cache_map,
+    #     **cached_source_kwargs,
+    # )
 
     pipeline = BasePipeline(batch_size,
-                            pre_batch_map=pre_batch_map,
+                            pre_cache_map=built.pre_cache_map,
+                            pre_batch_map=built.pre_batch_map,
                             post_batch_map=built.post_batch_map,
                             **pipeline_kwargs)
     source = PipelinedSource(base_source, pipeline)
