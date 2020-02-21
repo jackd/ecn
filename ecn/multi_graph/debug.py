@@ -11,6 +11,9 @@ class DebugBuilderContext(MultiGraphContext):
         self._batch_size = batch_size
         self._model_inputs = []
 
+    def pre_cache_context(self):
+        return self
+
     def pre_batch_context(self):
         return self
 
@@ -30,6 +33,8 @@ class DebugBuilderContext(MultiGraphContext):
 
     # def learning_phase(self) -> tf.Tensor:
     #     return tf.keras.backend.learning_phase()
+    def cache(self, x: TensorLike) -> TensorLike:
+        return tf.identity(x)
 
     def batch(self, tensor: TensorLike):
         if isinstance(tensor, tf.Tensor):

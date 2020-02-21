@@ -16,18 +16,18 @@ def compute_pooled_neighbors(in_times: IntArray,
                              out_times: IntArray,
                              event_duration: Optional[int] = None,
                              max_neighbors: int = -1):
-
+    dtype = in_times.dtype
     out_size = out_times.size
     if max_neighbors == -1:
         max_neighbors = out_size * 8
-    splits = np.empty((out_size + 1,), dtype=np.int64)
+    splits = np.empty((out_size + 1,), dtype=dtype)
     splits[0] = 0
 
     in_size = in_times.size
     if in_size == 0:
         splits[1:] = 0
-        return np.empty((0,), dtype=np.int64), splits
-    indices = np.empty((max_neighbors,), dtype=np.int64)
+        return np.empty((0,), dtype=dtype), splits
+    indices = np.empty((max_neighbors,), dtype=dtype)
     out_events = out_times.size
     i = 0
     it = in_times[i]
@@ -74,20 +74,20 @@ def compute_full_neighbors(in_times: IntArray,
     """
     Same as compute_pooled_neighbors, except we record the coordinates as well.
     """
+    dtype = in_times.dtype
     out_size = out_times.size
     in_size = in_times.size
     if in_size == 0 or out_size == 0:
-        splits = np.zeros((out_size + 1,), dtype=np.int64)
-        return np.empty((0,), dtype=np.int64), np.empty((0,),
-                                                        dtype=np.int64), splits
+        splits = np.zeros((out_size + 1,), dtype=dtype)
+        return np.empty((0,), dtype=dtype), np.empty((0,), dtype=dtype), splits
 
     if max_neighbors == -1:
         max_neighbors = out_size * 8
 
-    splits = np.empty((out_size + 1,), dtype=np.int64)
+    splits = np.empty((out_size + 1,), dtype=dtype)
     splits[0] = 0
-    indices = np.empty((max_neighbors,), dtype=np.int64)
-    partitions = np.empty((max_neighbors,), dtype=np.int64)
+    indices = np.empty((max_neighbors,), dtype=dtype)
+    partitions = np.empty((max_neighbors,), dtype=dtype)
     out_events = out_times.size
     i = 0
     it = in_times[i]
@@ -142,17 +142,19 @@ def compute_pointwise_neighbors(
     assert (in_times.size == in_coords.size)
     assert (out_times.size == out_coords.size)
 
+    dtype = in_times.dtype
+
     # grid_size = grid_splits.size - 1
     num_out_events = out_times.size
     num_in_events = in_times.size
 
-    index_splits = np.empty((num_out_events + 1,), dtype=np.int64)
+    index_splits = np.empty((num_out_events + 1,), dtype=dtype)
     index_splits[0] = 0
 
     if num_out_events == 0 or num_in_events == 0:
         index_splits[1:] = 0
         return (
-            np.empty((0,), dtype=np.int64),
+            np.empty((0,), dtype=dtype),
             index_splits,
         )
 
@@ -161,7 +163,7 @@ def compute_pointwise_neighbors(
 
     buffer_start_stops = np.zeros((grid_size, 2), dtype=np.int64)
     buffer_values = np.empty((grid_size, spatial_buffer_size), dtype=np.int64)
-    indices = np.empty((max_neighbors,), dtype=np.int64)
+    indices = np.empty((max_neighbors,), dtype=dtype)
 
     i = 0
     it = in_times[0]
@@ -274,14 +276,14 @@ def compute_neighbors(
     num_out_events = out_times.size
     num_in_events = in_times.size
 
-    index_splits = np.empty((num_out_events + 1,), dtype=np.int64)
+    index_splits = np.empty((num_out_events + 1,), dtype=grid_indices.dtype)
     index_splits[0] = 0
 
     if num_out_events == 0 or num_in_events == 0:
         index_splits[1:] = 0
         return (
-            np.empty((0,), dtype=np.int64),
-            np.empty((0,), dtype=np.int64),
+            np.empty((0,), dtype=grid_partitions.dtype),
+            np.empty((0,), dtype=grid_indices.dtype),
             index_splits,
         )
 
@@ -290,8 +292,8 @@ def compute_neighbors(
 
     buffer_start_stops = np.zeros((grid_size, 2), dtype=np.int64)
     buffer_values = np.empty((grid_size, spatial_buffer_size), dtype=np.int64)
-    partitions = np.empty((max_neighbors,), dtype=np.int64)
-    indices = np.empty((max_neighbors,), dtype=np.int64)
+    partitions = np.empty((max_neighbors,), dtype=grid_partitions.dtype)
+    indices = np.empty((max_neighbors,), dtype=grid_indices.dtype)
 
     i = 0
     it = in_times[0]

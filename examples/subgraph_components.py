@@ -10,7 +10,7 @@ with tf.Graph().as_default() as graph:
     y = tf.RaggedTensor.from_row_splits(x, [0, 3, 7, 10])
     # y = tf.SparseTensor(tf.expand_dims(x, axis=-1), tf.range(10), [10])
 
-graph_def = graph.as_graph_def()
+graph_def = graph.as_graph_def(add_shapes=True)
 
 
 def subgraph(graph_def, inputs, outputs) -> Callable:

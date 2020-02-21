@@ -16,24 +16,26 @@ def compute_pooled_neighbors(in_times: IntTensor,
         functools.partial(_np_neigh.compute_pooled_neighbors,
                           event_duration=event_duration,
                           max_neighbors=max_neighbors), [in_times, out_times],
-        [tf.int64] * 2)
+        [in_times.dtype] * 2)
     for t in indices, splits:
         t.set_shape((None,))
     return indices, splits
 
 
-def compute_full_neighbors(in_times: IntTensor,
-                           in_coords: IntTensor,
-                           out_times: IntTensor,
-                           event_duration: int = -1,
-                           max_neighbors: int = -1
-                          ) -> Tuple[IntTensor, IntTensor, IntTensor]:
+def compute_full_neighbors(
+        in_times: IntTensor,
+        in_coords: IntTensor,
+        out_times: IntTensor,
+        event_duration: int = -1,
+        max_neighbors: int = -1,
+        name=None,
+) -> Tuple[IntTensor, IntTensor, IntTensor]:
     # flatten conv
     partitions, indices, splits = tf.numpy_function(
         functools.partial(_np_neigh.compute_full_neighbors,
                           event_duration=event_duration,
                           max_neighbors=max_neighbors),
-        [in_times, in_coords, out_times], [tf.int64] * 3)
+        [in_times, in_coords, out_times], [in_times.dtype] * 3)
     for t in partitions, indices, splits:
         t.set_shape((None,))
     return partitions, indices, splits
@@ -51,7 +53,7 @@ def compute_pointwise_neighbors(in_times: IntTensor,
         functools.partial(_np_neigh.compute_pointwise_neighbors,
                           event_duration=event_duration,
                           spatial_buffer_size=spatial_buffer_size),
-        [in_times, in_coords, out_times, out_coords], [tf.int64] * 2)
+        [in_times, in_coords, out_times, out_coords], [in_times.dtype] * 2)
     for t in indices, splits:
         t.set_shape((None,))
     return indices, splits
@@ -68,14 +70,17 @@ def compute_neighbors(
         spatial_buffer_size: int,
         event_duration: Optional[int] = None,
 ) -> Tuple[IntTensor, IntTensor, IntTensor]:
-
+    assert (grid_partitions.dtype == tf.int32)  # HACK
+    assert (grid_indices.dtype == tf.int32)  # HACK
+    assert (grid_splits.dtype == tf.int32)  # HACK
     partitions, indices, splits = tf.numpy_function(
         functools.partial(_np_neigh.compute_neighbors,
                           event_duration=event_duration,
                           spatial_buffer_size=spatial_buffer_size), [
                               in_times, in_coords, out_times, out_coords,
                               grid_partitions, grid_indices, grid_splits
-                          ], [tf.int64] * 3)
+                          ],
+        [grid_partitions.dtype, grid_indices.dtype, grid_splits.dtype])
     for t in (partitions, indices, splits):
         t.set_shape((None,))
     return partitions, indices, splits

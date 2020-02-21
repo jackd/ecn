@@ -270,8 +270,8 @@ def inception_multi_graph(features,
     spike_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
 
     grid = comp.Grid(grid_shape)
-    # link = grid.link((3, 3), (1, 1), (0, 0))
-    link = grid.link((5, 5), (1, 1), (1, 1))
+    link = grid.link((3, 3), (1, 1), (0, 0))
+    # link = grid.link((5, 5), (1, 1), (1, 1))
 
     in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=5000)
     # in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=None)
@@ -281,7 +281,7 @@ def inception_multi_graph(features,
                                       decay_time=decay_time,
                                       min_mean_size=2048,
                                       reset_potential=reset_potential,
-                                      threshold=0.75 * threshold)
+                                      threshold=threshold)
 
     features = in_stream.prepare_model_inputs(polarity)
     features = tf.keras.layers.Lambda(lambda x: tf.identity(x.values))(features)
@@ -307,7 +307,7 @@ def inception_multi_graph(features,
     t_kernel[2] = True
     t_kernel[:, 2] = True
 
-    for min_mean_size in (512, 256):
+    for min_mean_size in (512, 128):
         # in place
         link = in_stream.grid.partial_self_link(t_kernel)
         t_convolver = comp.spatio_temporal_convolver(

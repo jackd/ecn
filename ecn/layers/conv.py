@@ -168,11 +168,12 @@ class SpatioTemporalEventConv(EventConvBase):
         super(SpatioTemporalEventConv,
               self).__init__(filters, temporal_kernel_size, **kwargs)
 
-    def _validate_kernel_size(self, input_shape):
-        if len(input_shape) == 2:
-            sk = input_shape[1][-1]
+    def _validate_kernel_size(self, dt_shape):
+        if isinstance(dt_shape, tf.TensorShape):
+            sk = dt_shape[-1]
         else:
-            sk = len(input_shape) - 1
+            sk = len(dt_shape)
+
         if sk is None:
             if self.spatial_kernel_size is None:
                 raise ValueError(
@@ -190,13 +191,13 @@ class SpatioTemporalEventConv(EventConvBase):
 
     def _kernel_shape(self, input_shape):
         filters_in = input_shape[0][-1]
-        self._validate_kernel_size(input_shape)
+        self._validate_kernel_size(input_shape[1:])
         # _spatial_size(input_shape)
         return (self.spatial_kernel_size, self.temporal_kernel_size, filters_in,
                 self.filters)
 
     def _decay_shape(self, input_shape):
-        self._validate_kernel_size(input_shape)
+        self._validate_kernel_size(input_shape[1:])
         return (self.spatial_kernel_size, self.temporal_kernel_size)
 
     def get_config(self):
@@ -221,12 +222,12 @@ class SpatioTemporalEventConv(EventConvBase):
 class FeaturelessSpatioTemporalEventConv(SpatioTemporalEventConv):
 
     def _kernel_shape(self, input_shape):
-        self._validate_kernel_size((None, *input_shape))
+        self._validate_kernel_size(input_shape)
         return (self.spatial_kernel_size, self.temporal_kernel_size,
                 self.filters)
 
     def _decay_shape(self, input_shape):
-        self._validate_kernel_size((None, *input_shape))
+        self._validate_kernel_size(input_shape)
         return (self.spatial_kernel_size, self.temporal_kernel_size)
 
     def call(self, inputs):
@@ -246,12 +247,12 @@ class BinarySpatioTemporalEventConv(SpatioTemporalEventConv):
 
     def _kernel_shape(self, input_shape):
         assert (len(input_shape[0]) == 1)
-        self._validate_kernel_size(input_shape)
+        self._validate_kernel_size(input_shape[1:])
         return (self.spatial_kernel_size, 2 * self.temporal_kernel_size,
                 self.filters)
 
     def _decay_shape(self, input_shape):
-        self._validate_kernel_size(input_shape)
+        self._validate_kernel_size(input_shape[1:])
         return (self.spatial_kernel_size, self.temporal_kernel_size)
 
     def call(self, inputs):

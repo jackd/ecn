@@ -20,12 +20,14 @@ def row_sorted(row_indices: IntTensor, col_indices: IntTensor,
 
 def transpose_csr(indices: IntTensor, splits: IntTensor,
                   values: tf.Tensor) -> Tuple[IntTensor, IntTensor, tf.Tensor]:
-    indices = tf.convert_to_tensor(indices, dtype=tf.int64)
-    splits = tf.convert_to_tensor(splits, dtype=tf.int64)
+    indices = tf.convert_to_tensor(indices, dtype_hint=tf.int64)
+    splits = tf.convert_to_tensor(splits, dtype_hint=tf.int64)
     values = tf.convert_to_tensor(values)
-    col_indices = splits_to_ids(splits)  # initial row indices
+    col_indices = tf.ragged.row_splits_to_segment_ids(
+        splits)  # initial row indices
     row_indices, col_indices, values = row_sorted(indices, col_indices, values)
-    return col_indices, ids_to_splits(row_indices), values
+    return col_indices, tf.ragged.segment_ids_to_row_splits(
+        row_indices, out_type=indices.dtype), values
 
 
 def mask_rows(values: tf.Tensor, row_splits: IntTensor,

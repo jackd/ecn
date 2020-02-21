@@ -1,4 +1,4 @@
-# import os
+import os
 # os.environ['NUMBA_DISABLE_JIT'] = '1'
 from typing import Optional, Callable
 from absl import logging
@@ -8,6 +8,7 @@ import tensorflow as tf
 import numpy as np
 from kblocks.framework.pipelines import BasePipeline
 from kblocks.framework.sources import DataSource
+from kblocks.framework.cached_source import cached_source
 from kblocks.framework.sources import PipelinedSource
 from kblocks.framework.trainable import Trainable
 from ecn import multi_graph as mg
@@ -46,12 +47,18 @@ def compile_stream_classifier(model: tf.keras.Model,
 
 
 @gin.configurable(module='ecn.utils')
+def get_cache_name(problem_id, model_id):
+    return f'{problem_id}_{model_id}'
+
+
+@gin.configurable(module='ecn.utils')
 def multi_graph_trainable(build_fn: Callable,
                           base_source: DataSource,
                           batch_size: int,
                           compiler=compile_stream_classifier,
-                          use_cache=False,
+                          cache_name: Optional[str] = None,
                           model_dir: Optional[str] = None,
+                          cached_source_kwargs={},
                           **pipeline_kwargs):
 
     logging.info('Building multi graph...')
@@ -60,15 +67,40 @@ def multi_graph_trainable(build_fn: Callable,
         base_source.example_spec, batch_size)
     logging.info('Successfully built!')
 
-    if use_cache:
-        pre_cache_map = built.pre_batch_map
-        pre_batch_map = None
+    if built.pre_cache_map is None:
+        logging.info('No pre_cache_map - not caching')
+
+        def pre_batch_map(*args, **kwargs):
+            return built.pre_batch_map(*args, **kwargs)
     else:
-        pre_cache_map = None
-        pre_batch_map = built.pre_batch_map
+        if cache_name is None:
+            logging.info('cache_name not given - not caching.')
+
+            def pre_batch_map(*args, **kwargs):
+                args = built.pre_cache_map(*args, **kwargs)
+                if built.pre_batch_map is not None:
+                    args = built.pre_batch_map(*args)
+                return args
+        else:
+
+            def pre_cache_map(*args, **kwargs):
+                out = built.pre_cache_map(*args, **kwargs)
+                assert (isinstance(out, tuple) and
+                        all(isinstance(o, tf.Tensor) for o in out))
+                assert (o.shape.ndims is not None for o in out)
+                return {f'feature-{i:04d}': v for i, v in enumerate(out)}
+
+            def pre_batch_map(kwargs):
+                return built.pre_batch_map(*tf.nest.flatten(kwargs))
+
+            base_source = cached_source(
+                cache_name,
+                base_source,
+                pre_cache_map,
+                **cached_source_kwargs,
+            )
 
     pipeline = BasePipeline(batch_size,
-                            pre_cache_map=pre_cache_map,
                             pre_batch_map=pre_batch_map,
                             post_batch_map=built.post_batch_map,
                             **pipeline_kwargs)
@@ -82,10 +114,11 @@ def vis_streams(build_fn, base_source: DataSource, num_frames=20, fps=4):
     from events_tfds.vis.image import as_frames
     import events_tfds.vis.anim as anim
 
-    builder = mg.MultiGraphBuilder(base_source.example_spec, batch_size=1)
+    builder = mg.MultiGraphBuilder(batch_size=1)
     with builder:
         with comp.stream_accumulator() as streams:
-            inputs = builder._pre_batch_builder._inputs
+            inputs = tf.nest.map_structure(builder.pre_cache_input,
+                                           base_source.example_spec)
             logging.info('Building multi graph...')
             build_fn(*inputs, **base_source.meta)
             logging.info('Successfully built!')
@@ -104,18 +137,28 @@ def vis_streams(build_fn, base_source: DataSource, num_frames=20, fps=4):
             outputs = (tuple(outputs), inputs[0]['polarity'])
         else:
             outputs = tuple(outputs)
-        fn = mg.subgraph(
-            tf.nest.flatten(inputs,
-                            expand_composites=True)[0].graph.as_graph_def(),
-            inputs, outputs)
+
+    flat_inputs = tf.nest.flatten(inputs, expand_composites=True)
+    fn = mg.subgraph(flat_inputs[0].graph.as_graph_def(add_shapes=True),
+                     flat_inputs,
+                     tf.nest.flatten(outputs, expand_composites=True))
+
+    def map_fn(*args, **kwargs):
+        flat_in = tf.nest.flatten((args, kwargs), expand_composites=True)
+        flat_out = fn(*flat_in)
+        return tf.nest.pack_sequence_as(outputs,
+                                        flat_out,
+                                        expand_composites=True)
 
     del builder
-    dataset = base_source.get_dataset('train').map(fn)
+    dataset = base_source.get_dataset('train').map(map_fn)
     for example in dataset:
         if has_polarity:
             streams, polarity = example
+            polarity = polarity.numpy()
         else:
             streams = example
+            polarity = None
         img_data = []
         print('Sizes: {}'.format([s[0].shape[0] for s in streams]))
         for i, (stream_data, shape) in enumerate(zip(streams, static_shapes)):
@@ -127,14 +170,14 @@ def vis_streams(build_fn, base_source: DataSource, num_frames=20, fps=4):
                 times, coords = stream_data
                 coords = coords.numpy()
 
-            # img_data.append(
-            #     as_frames(coords,
-            #               times.numpy(),
-            #               num_frames=num_frames,
-            #               polarity=polarity.numpy() if i == 0 else None,
-            #               shape=shape))
+            img_data.append(
+                as_frames(coords,
+                          times.numpy(),
+                          num_frames=num_frames,
+                          polarity=polarity if i == 0 else None,
+                          shape=shape))
 
-        # anim.animate_frames_multi(*img_data, fps=fps)
+        anim.animate_frames_multi(*img_data, fps=fps)
 
 
 def _vis_single_adjacency(indices, splits, in_times, out_times, decay_time, ax0,
@@ -156,11 +199,12 @@ def _vis_single_adjacency(indices, splits, in_times, out_times, decay_time, ax0,
 
 def vis_adjacency(build_fn, base_source: DataSource):
     import matplotlib.pyplot as plt
-    builder = mg.MultiGraphBuilder(base_source.example_spec, batch_size=1)
+    builder = mg.MultiGraphBuilder(batch_size=1)
     with builder:
         with comp.stream_accumulator() as streams:
             with comp.convolver_accumulator() as convolvers:
-                inputs = builder._pre_batch_builder._inputs
+                inputs = tf.nest.map_structure(builder.pre_cache_input,
+                                               base_source.example_spec)
                 logging.info('Building multi graph...')
                 build_fn(*inputs, **base_source.meta)
                 logging.info('Successfully built!')
@@ -175,13 +219,20 @@ def vis_adjacency(build_fn, base_source: DataSource):
                 (c.indices, c.splits, c.in_stream.times, c.out_stream.times))
             decay_times.append(c.decay_time)
 
-        fn = mg.subgraph(
-            tf.nest.flatten(inputs,
-                            expand_composites=True)[0].graph.as_graph_def(),
-            inputs, outputs)
+    flat_inputs = tf.nest.flatten(inputs, expand_composites=True)
+    fn = mg.subgraph(flat_inputs[0].graph.as_graph_def(add_shapes=True),
+                     flat_inputs,
+                     tf.nest.flatten(outputs, expand_composites=True))
+
+    def map_fn(*args, **kwargs):
+        flat_in = tf.nest.flatten((args, kwargs), expand_composites=True)
+        flat_out = fn(*flat_in)
+        return tf.nest.pack_sequence_as(outputs,
+                                        flat_out,
+                                        expand_composites=True)
 
     del builder
-    dataset = base_source.get_dataset('train').map(fn)
+    dataset = base_source.get_dataset('train').map(map_fn)
     num_convolvers = len(convolvers)
     for convolvers in dataset:
         convolvers = tf.nest.map_structure(lambda c: c.numpy(), convolvers)
@@ -207,12 +258,12 @@ if __name__ == '__main__':
     from ecn.problems import sources
 
     # build_fn = builders.simple_multi_graph
-    # build_fn = builders.inception_multi_graph
-    # source = sources.nmnist_source()
+    build_fn = builders.inception_multi_graph
+    source = sources.nmnist_source()
     # build_fn = builders.inception128_multi_graph
     # source = sources.cifar10_dvs_source()
-    build_fn = builders.simple1d_graph
-    source = sources.ntidigits_source()
+    # build_fn = builders.simple1d_graph
+    # source = sources.ntidigits_source()
 
     # multi_graph_trainable(build_fn, source, batch_size=2)
     # print('built successfully')

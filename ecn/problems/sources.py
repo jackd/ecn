@@ -5,17 +5,18 @@ from kblocks.framework.sources import TfdsSource
 
 
 @gin.configurable(module='ecn.sources')
-def nmnist_source():
+def nmnist_source(shuffle_files=None):
     from events_tfds.events.nmnist import NMNIST
     from events_tfds.events.nmnist import NUM_CLASSES
     from events_tfds.events.nmnist import GRID_SHAPE
     return TfdsSource(NMNIST(),
                       split_map={'validation': 'test'},
-                      meta=dict(num_classes=NUM_CLASSES, grid_shape=GRID_SHAPE))
+                      meta=dict(num_classes=NUM_CLASSES, grid_shape=GRID_SHAPE),
+                      shuffle_files=shuffle_files)
 
 
 @gin.configurable(module='ecn.sources')
-def cifar10_dvs_source(train_percent=90):
+def cifar10_dvs_source(train_percent=90, shuffle_files=None):
     from events_tfds.events.cifar10_dvs import Cifar10DVS
     from events_tfds.events.cifar10_dvs import NUM_CLASSES
     from events_tfds.events.cifar10_dvs import GRID_SHAPE
@@ -32,7 +33,8 @@ def cifar10_dvs_source(train_percent=90):
             'train': int(examples_per_epoch * train_percent / 100),
             'validation': int(examples_per_epoch * (1 - train_percent / 100))
         },
-        meta=dict(num_classes=NUM_CLASSES, grid_shape=GRID_SHAPE))
+        meta=dict(num_classes=NUM_CLASSES, grid_shape=GRID_SHAPE),
+        shuffle_files=shuffle_files)
 
 
 @gin.configurable(module='ecn.sources')

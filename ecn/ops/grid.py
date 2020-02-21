@@ -59,10 +59,10 @@ def output_shape(in_shape, kernel_shape, strides, padding):
 def grid_coords(in_shape: IntTensor, kernel_shape: IntTensor,
                 strides: IntTensor,
                 padding: IntTensor) -> Tuple[IntTensor, IntTensor]:
-    in_shape = tf.convert_to_tensor(in_shape, dtype=tf.int64)
-    kernel_shape = tf.convert_to_tensor(kernel_shape, dtype=tf.int64)
-    strides = tf.convert_to_tensor(strides, dtype=tf.int64)
-    padding = tf.convert_to_tensor(padding, dtype=tf.int64)
+    in_shape = tf.convert_to_tensor(in_shape, dtype_hint=tf.int64)
+    kernel_shape = tf.convert_to_tensor(kernel_shape, dtype_hint=tf.int64)
+    strides = tf.convert_to_tensor(strides, dtype_hint=tf.int64)
+    padding = tf.convert_to_tensor(padding, dtype_hint=tf.int64)
 
     out_shape = output_shape(in_shape, kernel_shape, strides, padding)
     coords_nd = base_grid_coords(out_shape)
@@ -71,9 +71,9 @@ def grid_coords(in_shape: IntTensor, kernel_shape: IntTensor,
 
 
 def shift_grid_coords(out_coords, kernel_shape, strides, padding):
-    kernel_shape = tf.convert_to_tensor(kernel_shape, dtype=tf.int64)
-    strides = tf.convert_to_tensor(strides, dtype=tf.int64)
-    padding = tf.convert_to_tensor(padding, dtype=tf.int64)
+    kernel_shape = tf.convert_to_tensor(kernel_shape, dtype_hint=tf.int64)
+    strides = tf.convert_to_tensor(strides, dtype_hint=tf.int64)
+    padding = tf.convert_to_tensor(padding, dtype_hint=tf.int64)
     return out_coords * strides + (kernel_shape - 1) // 2 - padding
 
 
@@ -82,11 +82,11 @@ def _valid_partitions(coords, offset, in_shape):
     coords = tf.expand_dims(coords, axis=-2) + offset
     valid = tf.logical_and(tf.reduce_all(coords >= 0, axis=-1),
                            tf.reduce_all(coords < in_shape, axis=-1))
-    num_partitions = tf.shape(offset, out_type=tf.int64)[0]
+    num_partitions = tf.shape(offset, out_type=in_shape.dtype)[0]
     partitions = tf.tile(tf.expand_dims(tf.range(num_partitions), axis=0),
                          (out_size, 1))
 
-    splits = lengths_to_splits(mask_to_lengths(valid))
+    splits = lengths_to_splits(mask_to_lengths(valid, dtype=offset.dtype))
     partitions = tf.boolean_mask(partitions, valid)
     coords = tf.boolean_mask(coords, valid)
     coords = ravel_multi_index(coords, in_shape)
@@ -96,10 +96,11 @@ def _valid_partitions(coords, offset, in_shape):
 def sparse_neighborhood(in_shape: IntTensor, kernel_shape: IntTensor,
                         strides: IntTensor, padding: IntTensor
                        ) -> Tuple[IntTensor, IntTensor, IntTensor, IntTensor]:
-    in_shape = tf.convert_to_tensor(in_shape, dtype=tf.int64)
-    kernel_shape = tf.convert_to_tensor(kernel_shape, dtype=tf.int64)
-    strides = tf.convert_to_tensor(strides, dtype=tf.int64)
-    padding = tf.convert_to_tensor(padding, dtype=tf.int64)
+    in_shape = tf.convert_to_tensor(in_shape, dtype_hint=tf.int64)
+    dtype = in_shape.dtype
+    kernel_shape = tf.convert_to_tensor(kernel_shape, dtype=dtype)
+    strides = tf.convert_to_tensor(strides, dtype=dtype)
+    padding = tf.convert_to_tensor(padding, dtype=dtype)
 
     coords, out_shape = grid_coords(in_shape, kernel_shape, strides, padding)
     partitions, coords, splits = _valid_partitions(
@@ -108,8 +109,8 @@ def sparse_neighborhood(in_shape: IntTensor, kernel_shape: IntTensor,
 
 
 def sparse_neighborhood_in_place(in_shape, kernel_shape):
-    in_shape = tf.convert_to_tensor(in_shape, dtype=tf.int64)
-    kernel_shape = tf.convert_to_tensor(kernel_shape, dtype=tf.int64)
+    in_shape = tf.convert_to_tensor(in_shape, dtype_hint=tf.int64)
+    kernel_shape = tf.convert_to_tensor(kernel_shape, dtype_hint=tf.int64)
     coords = base_grid_coords(in_shape) - ((kernel_shape - 1) // 2)
     partitions, coords, splits = _valid_partitions(
         coords, base_grid_coords(kernel_shape), in_shape)
@@ -118,26 +119,24 @@ def sparse_neighborhood_in_place(in_shape, kernel_shape):
 
 def sparse_neighborhood_from_mask(in_shape: IntTensor, kernel_mask: BoolTensor,
                                   strides: IntTensor, padding: IntTensor):
-    in_shape = tf.convert_to_tensor(in_shape, dtype=tf.int64)
-    kernel_mask = tf.convert_to_tensor(kernel_mask, dtype=tf.bool)
-    strides = tf.convert_to_tensor(strides, dtype=tf.int64)
-    padding = tf.convert_to_tensor(padding, dtype=tf.int64)
+    in_shape = tf.convert_to_tensor(in_shape, dtype_hint=tf.int64)
+    kernel_mask = tf.convert_to_tensor(kernel_mask, dtype_hint=tf.bool)
+    strides = tf.convert_to_tensor(strides, dtype_hint=tf.int64)
+    padding = tf.convert_to_tensor(padding, dtype_hint=tf.int64)
 
     kernel_shape = tf.shape(kernel_mask, out_type=tf.int64)
     coords, out_shape = grid_coords(in_shape, kernel_shape, strides, padding)
-    partitions, coords, splits = _valid_partitions(coords,
-                                                   tf.where(kernel_mask),
-                                                   in_shape)
+    partitions, coords, splits = _valid_partitions(
+        coords, tf.cast(tf.where(kernel_mask), coords.dtype), in_shape)
     return partitions, coords, splits, out_shape
 
 
 def sparse_neighborhood_from_mask_in_place(in_shape: IntTensor,
                                            kernel_mask: BoolTensor):
-    in_shape = tf.convert_to_tensor(in_shape, dtype=tf.int64)
+    in_shape = tf.convert_to_tensor(in_shape, dtype_hint=tf.int64)
     kernel_mask = tf.convert_to_tensor(kernel_mask, dtype=tf.bool)
-    kernel_shape = tf.shape(kernel_mask, out_type=tf.int64)
+    kernel_shape = tf.shape(kernel_mask, out_type=in_shape.dtype)
     coords = base_grid_coords(in_shape) - ((kernel_shape - 1) // 2)
-    partitions, coords, splits = _valid_partitions(coords,
-                                                   tf.where(kernel_mask),
-                                                   in_shape)
+    partitions, coords, splits = _valid_partitions(
+        coords, tf.cast(tf.where(kernel_mask), coords.dtype), in_shape)
     return partitions, coords, splits

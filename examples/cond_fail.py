@@ -7,7 +7,7 @@ with graph.as_default():
     training = tf.keras.backend.placeholder(shape=(), dtype=tf.bool)
     z = tf.cond(training, lambda: x * 10, lambda: y * 2)
 
-graph_def = graph.as_graph_def()
+graph_def = graph.as_graph_def(add_shapes=True)
 
 
 def fn(*args):

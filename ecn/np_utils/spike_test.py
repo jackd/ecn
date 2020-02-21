@@ -24,8 +24,8 @@ class SpikeTest(unittest.TestCase):
         actual_t, actual_c = spike.spike_threshold(
             times,
             coords,
-            neigh_coords=np.array([0, 1]),
-            neigh_splits=np.array([0, 1, 2]),
+            grid_indices=np.array([0, 1]),
+            grid_splits=np.array([0, 1, 2]),
             **kwargs)
 
         actual_t0 = actual_t[actual_c == 0]

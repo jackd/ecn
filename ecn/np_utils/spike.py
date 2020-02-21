@@ -21,7 +21,7 @@ def global_spike_threshold(times: IntArray,
     """
     if max_out_events == -1:
         max_out_events = times.size
-    out_times = np.empty((max_out_events,), dtype=np.int64)
+    out_times = np.empty((max_out_events,), dtype=times.dtype)
 
     out_events = 0
     potential = 0.
@@ -71,14 +71,15 @@ def spike_threshold(times: IntArray,
     max_out_events = times.size
     in_events = times.size
     if in_events == 0:
-        return np.empty((0,), dtype=np.int64), np.empty((0,), dtype=np.int64)
+        return np.empty((0,), dtype=times.dtype), np.empty((0,),
+                                                           dtype=coords.dtype)
     if out_size == -1:
         out_size = np.max(grid_indices) + 1
 
     potentials = np.zeros((out_size,), dtype=np.float32)
-    potential_times = np.zeros((out_size,), dtype=np.int64)
-    out_times = np.empty((max_out_events,), dtype=np.int64)
-    out_coords = np.empty((max_out_events,), dtype=np.int64)
+    potential_times = np.zeros((out_size,), dtype=times.dtype)
+    out_times = np.empty((max_out_events,), dtype=times.dtype)
+    out_coords = np.empty((max_out_events,), dtype=coords.dtype)
 
     out_events = 0
     for i in range(in_events):

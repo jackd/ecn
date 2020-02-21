@@ -1,0 +1,12 @@
+import kblocks.framework.cached_source
+import ecn.problems.augment
+include 'nmnist.gin'
+
+base_source = @Augmented2DSource()
+Augmented2DSource.base_source = @nmnist_source()
+nmnist_source.shuffle_files = False
+
+Augmented2DSource.flip_time = True
+cache_repeats = 2
+
+problem_id = 'nmnist-aug'

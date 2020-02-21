@@ -9,6 +9,6 @@
     "reportTypeshedErrors": false,
     "reportMissingImports": false,
     "reportMissingTypeStubs": false,
-    "reportUntypedFunctionDecorator": true,
+    "reportUntypedFunctionDecorator": false,
     "reportUntypedClassDecorator": true
 }

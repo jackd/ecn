@@ -1,0 +1,3 @@
+include 'base.gin'
+include 'sources/nmnist-aug.gin'
+include 'builders/inception.gin'

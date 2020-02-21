@@ -18,7 +18,7 @@ with tf.Graph().as_default() as graph:
 
     tf.keras.layers.Dense(2)(tf.reshape(out, (1, 1)))
 
-graph_def = graph.as_graph_def()
+graph_def = graph.as_graph_def(add_shapes=True)
 
 
 def subgraph(graph_def, input_op_names, output_names):
