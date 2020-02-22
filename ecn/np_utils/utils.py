@@ -50,29 +50,28 @@ def min_on_leading_axis(x: np.ndarray):
     return out
 
 
-@nb.njit()
-def iter_product(first, *rest):
-    if len(rest) == 0:
-        for f in first:
-            yield f,
-    else:
-        for f in first:
-            for others in iter_product(*rest):  # pylint: disable=no-value-for-parameter
-                yield (f,) + others
+# @nb.njit()
+# def iter_product(first, *rest):
+#     if len(rest) == 0:
+#         for f in first:
+#             yield f,
+#     else:
+#         for f in first:
+#             for others in iter_product(*rest):  # pylint: disable=no-value-for-parameter
+#                 yield (f,) + others
 
-
-@nb.njit()
-def iter_product_array(first: np.ndarray, *rest: np.ndarray) -> np.ndarray:
-    n = len(first)
-    for r in rest:
-        n *= len(r)
-    nd = len(rest) + 1
-    out = np.empty((n, nd), dtype=first.dtype)
-    i = 0
-    for indices in iter_product(first, *rest):
-        out[i] = indices
-        i += 1
-    return out
+# @nb.njit()
+# def iter_product_array(first: np.ndarray, *rest: np.ndarray) -> np.ndarray:
+#     n = len(first)
+#     for r in rest:
+#         n *= len(r)
+#     nd = len(rest) + 1
+#     out = np.empty((n, nd), dtype=first.dtype)
+#     i = 0
+#     for indices in iter_product(first, *rest):
+#         out[i] = indices
+#         i += 1
+#     return out
 
 
 @nb.njit()

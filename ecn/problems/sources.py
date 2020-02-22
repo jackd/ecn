@@ -2,21 +2,59 @@ import gin
 import tensorflow as tf
 import tensorflow_datasets as tfds
 from kblocks.framework.sources import TfdsSource
+from kblocks.framework.sources import BaseSource
 
 
 @gin.configurable(module='ecn.sources')
-def nmnist_source(shuffle_files=None):
+def nmnist_source2():
+    from events_tfds.events.nmnist import NMNIST
+    from events_tfds.events.nmnist import NUM_CLASSES
+    from events_tfds.events.nmnist import GRID_SHAPE
+    import os
+    builder = NMNIST()
+    info = builder.info
+    examples_per_epoch = dict(train=info.splits['train'].num_examples,
+                              validation=info.splits['test'].num_examples)
+    dd = builder.data_dir
+    fns = os.listdir(dd)
+
+    fns = {
+        'train': [
+            os.path.join(dd, k) for k in fns if k.startswith('nmnist-train')
+        ],
+        'validation': [
+            os.path.join(dd, k) for k in fns if k.startswith('nmnist-test')
+        ]
+    }
+
+    def map_fn(serialized_example):
+        features = info.features
+        data = tfds.core.example_parser.ExampleParser(
+            features.get_serialized_info()).parse_example(serialized_example)
+        data = features.decode_example(data)
+        return data['events'], data['label']
+
+    def dataset_fn(split):
+        return tf.data.TFRecordDataset(fns[split]).map(map_fn)
+
+    return BaseSource(dataset_fn,
+                      examples_per_epoch,
+                      meta=dict(num_classes=NUM_CLASSES, grid_shape=GRID_SHAPE))
+
+
+@gin.configurable(module='ecn.sources')
+def nmnist_source(**kwargs):
     from events_tfds.events.nmnist import NMNIST
     from events_tfds.events.nmnist import NUM_CLASSES
     from events_tfds.events.nmnist import GRID_SHAPE
     return TfdsSource(NMNIST(),
                       split_map={'validation': 'test'},
                       meta=dict(num_classes=NUM_CLASSES, grid_shape=GRID_SHAPE),
-                      shuffle_files=shuffle_files)
+                      **kwargs)
 
 
 @gin.configurable(module='ecn.sources')
-def cifar10_dvs_source(train_percent=90, shuffle_files=None):
+def cifar10_dvs_source(train_percent=90, **kwargs):
     from events_tfds.events.cifar10_dvs import Cifar10DVS
     from events_tfds.events.cifar10_dvs import NUM_CLASSES
     from events_tfds.events.cifar10_dvs import GRID_SHAPE
@@ -34,7 +72,7 @@ def cifar10_dvs_source(train_percent=90, shuffle_files=None):
             'validation': int(examples_per_epoch * (1 - train_percent / 100))
         },
         meta=dict(num_classes=NUM_CLASSES, grid_shape=GRID_SHAPE),
-        shuffle_files=shuffle_files)
+        **kwargs)
 
 
 @gin.configurable(module='ecn.sources')
@@ -80,7 +118,7 @@ def vis_example(example,
 if __name__ == '__main__':
     # source = cifar10_dvs_source()
     # vis_kwargs = {'reverse_xy': True, 'flip_up_down': True}
-    source, vis_kwargs = nmnist_source(), {}
+    source, vis_kwargs = nmnist_source2(), {}
 
     print('number of examples:')
     for split in ('train', 'validation'):

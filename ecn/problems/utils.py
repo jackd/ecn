@@ -8,7 +8,6 @@ import tensorflow as tf
 import numpy as np
 from kblocks.framework.pipelines import BasePipeline
 from kblocks.framework.sources import DataSource
-from kblocks.framework.cached_source import cached_source
 from kblocks.framework.sources import PipelinedSource
 from kblocks.framework.trainable import Trainable
 from ecn import multi_graph as mg
@@ -52,54 +51,18 @@ def get_cache_name(problem_id, model_id):
 
 
 @gin.configurable(module='ecn.utils')
-def multi_graph_trainable(
-        build_fn: Callable,
-        base_source: DataSource,
-        batch_size: int,
-        compiler=compile_stream_classifier,
-        #   cache_name: Optional[str] = None,
-        model_dir: Optional[str] = None,
-        #   cached_source_kwargs={},
-        **pipeline_kwargs):
+def multi_graph_trainable(build_fn: Callable,
+                          base_source: DataSource,
+                          batch_size: int,
+                          compiler=compile_stream_classifier,
+                          model_dir: Optional[str] = None,
+                          **pipeline_kwargs):
 
     logging.info('Building multi graph...')
     built = mg.build_multi_graph(
         functools.partial(build_fn, **base_source.meta),
         base_source.example_spec, batch_size)
     logging.info('Successfully built!')
-
-    # if built.pre_cache_map is None:
-    #     logging.info('No pre_cache_map - not caching')
-
-    #     def pre_batch_map(*args, **kwargs):
-    #         return built.pre_batch_map(*args, **kwargs)
-    # else:
-    #     if cache_name is None:
-    #         logging.info('cache_name not given - not caching.')
-
-    #         def pre_batch_map(*args, **kwargs):
-    #             args = built.pre_cache_map(*args, **kwargs)
-    #             if built.pre_batch_map is not None:
-    #                 args = built.pre_batch_map(*args)
-    #             return args
-    # else:
-
-    # def pre_cache_map(*args, **kwargs):
-    #     out = built.pre_cache_map(*args, **kwargs)
-    #     assert (isinstance(out, tuple) and
-    #             all(isinstance(o, tf.Tensor) for o in out))
-    #     assert (o.shape.ndims is not None for o in out)
-    #     return {f'feature-{i:04d}': v for i, v in enumerate(out)}
-
-    # def pre_batch_map(kwargs):
-    #     return built.pre_batch_map(*tf.nest.flatten(kwargs))
-
-    # base_source = cached_source(
-    #     cache_name,
-    #     base_source,
-    #     pre_cache_map,
-    #     **cached_source_kwargs,
-    # )
 
     pipeline = BasePipeline(batch_size,
                             pre_cache_map=built.pre_cache_map,
@@ -109,6 +72,10 @@ def multi_graph_trainable(
     source = PipelinedSource(base_source, pipeline)
     model = built.trained_model
     compiler(model)
+    if pipeline._use_cache:
+        with tf.Graph().as_default():
+            for split in ('train', 'validation'):
+                source.get_dataset(split)
     return Trainable(source, model, model_dir)
 
 
@@ -255,13 +222,28 @@ def vis_adjacency(build_fn, base_source: DataSource):
         plt.show()
 
 
+def benchmark_source(source_fn, build_fn, take=1000, batch_size=32):
+    base_source = source_fn(examples_per_epoch={
+        'train': take,
+        'validation': batch_size,
+    })
+    trainable = multi_graph_trainable(
+        build_fn,
+        base_source,
+        batch_size=batch_size,
+        cache_dir='/tmp/ecn_tests/benchmark_source',
+        clear_cache=True,
+        use_cache=True)
+    trainable.fit(10, validation_freq=20)
+
+
 if __name__ == '__main__':
     from ecn.problems import builders
     from ecn.problems import sources
 
     # build_fn = builders.simple_multi_graph
     build_fn = builders.inception_multi_graph
-    source = sources.nmnist_source()
+    # source = sources.nmnist_source()
     # build_fn = builders.inception128_multi_graph
     # source = sources.cifar10_dvs_source()
     # build_fn = builders.simple1d_graph
@@ -271,13 +253,15 @@ if __name__ == '__main__':
     # print('built successfully')
 
     # vis_streams(build_fn, source)
-    vis_adjacency(build_fn, source)
-#     from ecn.problems.nmnist import simple_multi_graph
-#     from ecn.problems.nmnist import nmnist_source
-#     trainable = multi_grpah_trainable(simple_multi_graph,
-#                                       nmnist_source(),
-#                                       batch_size=16,
-#                                       compiler=compile_stream_classifier)
-#     source = trainable.source
-#     for example in source:
-#         pass
+    # vis_adjacency(build_fn, source)
+    #     from ecn.problems.nmnist import simple_multi_graph
+    #     from ecn.problems.nmnist import nmnist_source
+    #     trainable = multi_grpah_trainable(simple_multi_graph,
+    #                                       nmnist_source(),
+    #                                       batch_size=16,
+    #                                       compiler=compile_stream_classifier)
+    #     source = trainable.source
+    #     for example in source:
+    #         pass
+    source_fn = sources.nmnist_source
+    benchmark_source(source_fn, build_fn)

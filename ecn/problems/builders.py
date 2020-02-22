@@ -490,7 +490,6 @@ def inception128_multi_graph(features,
         branched = tf.nn.relu(ft + fp + fc)
 
         branched = layers.BatchNormalization()(branched)
-        branched = layers.Dropout(dropout_rate)(branched)
         features = features + branched
 
         link = in_stream.grid.link((3, 3), (2, 2), (1, 1))

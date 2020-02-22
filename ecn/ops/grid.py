@@ -25,15 +25,16 @@ def ravel_multi_index(indices, dims: Union[int, tf.Tensor], axis=-1):
             'axis must be positive, but after adding ndim still got {}'.format(
                 axis))
 
+    dtype = indices.dtype
     if isinstance(dims, int):
-        dims_ = tf.constant(dims, dtype=tf.int64)
+        dims_ = tf.convert_to_tensor(dims, dtype=dtype)
     else:
         dims_ = dims
     assert (isinstance(dims_, tf.Tensor))
     if dims_.shape.ndims == 0:
-        ndim = tf.shape(indices, out_type=tf.int64)[axis]
+        ndim = tf.shape(indices, out_type=dtype)[axis]
         # scalar
-        offset = dims_**tf.range(ndim - 1, -1, -1, dtype=dims_.dtype)
+        offset = dims_**tf.range(ndim - 1, -1, -1, dtype=dtype)
     else:
         offset = tf.math.cumprod(dims_, exclusive=True, reverse=True)
 
@@ -110,7 +111,7 @@ def sparse_neighborhood(in_shape: IntTensor, kernel_shape: IntTensor,
 
 def sparse_neighborhood_in_place(in_shape, kernel_shape):
     in_shape = tf.convert_to_tensor(in_shape, dtype_hint=tf.int64)
-    kernel_shape = tf.convert_to_tensor(kernel_shape, dtype_hint=tf.int64)
+    kernel_shape = tf.convert_to_tensor(kernel_shape, dtype_hint=in_shape.dtype)
     coords = base_grid_coords(in_shape) - ((kernel_shape - 1) // 2)
     partitions, coords, splits = _valid_partitions(
         coords, base_grid_coords(kernel_shape), in_shape)

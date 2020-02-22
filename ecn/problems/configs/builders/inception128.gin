@@ -1,3 +1,4 @@
 import ecn.problems.builders
+include '../misc/l2_reg.gin'
 build_fn = @ecn.builders.inception128_multi_graph
 model_id = 'inception128'

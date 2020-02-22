@@ -47,7 +47,8 @@ def row_sum(values: IntArray, splits: IntArray, out=None) -> IntArray:
     nrows = splits.size - 1
     if out is None:
         out = np.zeros((nrows,), dtype=values.dtype)
-    for i in nb.prange(nrows):  # pylint: disable=not-an-iterable
+    # for i in nb.prange(nrows):  # pylint: disable=not-an-iterable
+    for i in range(nrows):
         out[i] = values[splits[i]:splits[i + 1]].sum()
     return out
 
@@ -63,17 +64,18 @@ def row(values, splits, row_index) -> IntArray:
     return values[splits[row_index]:splits[row_index + 1]]
 
 
-@nb.njit(inline='always')
-def rows(values, splits):
-    s0 = splits[0]
-    for s in splits[1:]:
-        yield values[s0:s]
-        s0 = s
+# @nb.njit(inline='always')
+# def rows(values, splits):
+#     s0 = splits[0]
+#     for s in splits[1:]:
+#         yield values[s0:s]
+#         s0 = s
 
 
 @nb.njit(inline='always', parallel=PARALLEL)
 def col_sort(values, splits) -> None:
-    for i in nb.prange(splits.size - 1):  # pylint: disable=not-an-iterable
+    # for i in nb.prange(splits.size - 1):  # pylint: disable=not-an-iterable
+    for i in range(splits.size - 1):
         row(values, splits, i).sort()
 
 
@@ -90,7 +92,8 @@ def ragged_broadcast(values: np.ndarray,
                      row_splits: IntArray,
                      out: Optional[np.ndarray] = None):
     out_ = np.empty((row_splits[-1],), values.dtype) if out is None else out
-    for i in nb.prange(row_splits.size - 1):  # pylint: disable=not-an-iterable
+    # for i in nb.prange(row_splits.size - 1):  # pylint: disable=not-an-iterable
+    for i in range(row_splits.size - 1):
         out_[row_splits[i]:row_splits[i + 1]] = values[i]
     return out_
 

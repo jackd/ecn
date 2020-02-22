@@ -70,9 +70,6 @@ def compute_neighbors(
         spatial_buffer_size: int,
         event_duration: Optional[int] = None,
 ) -> Tuple[IntTensor, IntTensor, IntTensor]:
-    assert (grid_partitions.dtype == tf.int32)  # HACK
-    assert (grid_indices.dtype == tf.int32)  # HACK
-    assert (grid_splits.dtype == tf.int32)  # HACK
     partitions, indices, splits = tf.numpy_function(
         functools.partial(_np_neigh.compute_neighbors,
                           event_duration=event_duration,

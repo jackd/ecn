@@ -3,9 +3,15 @@ import ecn.problems.augment
 include 'nmnist.gin'
 
 base_source = @Augmented2DSource()
-Augmented2DSource.base_source = @nmnist_source()
+Augmented2DSource.base_source = @nmnist_source2()
 
 Augmented2DSource.flip_time = True
 cache_repeats = 2
+
+kb.framework.TfdsSource.read_config = @tfds.ReadConfig()
+# tfds.ReadConfig.interleave_parallel_reads = 1
+# tfds.ReadConfig.interleave_block_length = 1
+use_cache = False
+
 
 problem_id = 'nmnist-aug'

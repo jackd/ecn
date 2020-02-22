@@ -18,6 +18,8 @@ cache_dir/kb.path.model_dir.run = None
 kb.framework.BasePipeline.cache_dir = %cache_dir
 kb.framework.BasePipeline.cache_repeats = %cache_repeats
 kb.framework.BasePipeline.clear_cache = %clear_cache
+kb.framework.BasePipeline.num_shards = %num_shards
+kb.framework.BasePipeline.use_cache = %use_cache
 
 ecn.utils.multi_graph_trainable.model_dir = %model_dir
 
@@ -38,8 +40,10 @@ ecn.utils.compile_stream_classifier.target = %target
 target = 'final'
 
 TfConfig.jit = True
+use_cache = True
 cache_repeats = None
 clear_cache = False
+num_shards = None
 
 # to define:
 # build_fn =

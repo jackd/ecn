@@ -36,16 +36,21 @@ def get_item(i, values, start, mod):
 @njit()
 def indices(start_stop, mod):
     start, stop = start_stop
+    dtype = start_stop.dtype
     if stop >= start:
-        for i in range(start, stop):
-            yield i
+        diff = stop - start
+        out = np.empty((diff,), dtype=dtype)
+        for i in range(diff):
+            out[i] = start + i
+        return out
     else:
-        for i in range(start, mod):
-            yield i
+        diff = mod - start
+        out = np.empty((diff + stop,), dtype=dtype)
+        for i in range(diff):
+            out[i] = start + i
         for i in range(stop):
-            yield i
-        # yield from range(start, mod)
-        # yield from range(stop)
+            out[i + diff] = i
+        return out
 
 
 @njit(inline='always')

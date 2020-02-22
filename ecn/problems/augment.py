@@ -23,6 +23,7 @@ class Augmented2DSource(DataSource):
             rotate_limits: Optional[
                 Tuple[float, float]] = DEFAULT_ROTATE_LIMITS,
             block_length: int = 32,
+            num_parallel_calls: int = 1,
     ):
         self._base_source = base_source
         keys = []
@@ -38,6 +39,7 @@ class Augmented2DSource(DataSource):
         self._param_sets = {k: np.array(v) for k, v in zip(keys, combinations)}
         self._rotate_limits = rotate_limits
         self._block_length = block_length
+        self._num_parallel_calls = num_parallel_calls
 
     @property
     def meta(self) -> Dict[str, Any]:
@@ -67,7 +69,7 @@ class Augmented2DSource(DataSource):
                     return ((features, labels) if weights is None else
                             (features, labels, weights))
 
-                return base_dataset.map(base_map_fn, AUTOTUNE)
+                return base_dataset.map(base_map_fn, self._num_parallel_calls)
 
             return aug_ds.interleave(params_map_fn,
                                      cycle_length=self._num_combinations,
@@ -77,10 +79,7 @@ class Augmented2DSource(DataSource):
             return base_dataset
 
     def examples_per_epoch(self, split: Split):
-        num = self._base_source.examples_per_epoch(split)
-        if split == 'train':
-            num *= self._num_combinations
-        return num
+        return self._base_source.examples_per_epoch(split)
 
 
 if __name__ == '__main__':
