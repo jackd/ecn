@@ -22,6 +22,7 @@ class Augmented2DSource(DataSource):
             flip_time: bool = True,
             rotate_limits: Optional[
                 Tuple[float, float]] = DEFAULT_ROTATE_LIMITS,
+            cycle_length: int = 1,
             block_length: int = 32,
             num_parallel_calls: int = 1,
     ):
@@ -40,6 +41,7 @@ class Augmented2DSource(DataSource):
         self._rotate_limits = rotate_limits
         self._block_length = block_length
         self._num_parallel_calls = num_parallel_calls
+        self._cycle_length = cycle_length
 
     @property
     def meta(self) -> Dict[str, Any]:
@@ -72,7 +74,7 @@ class Augmented2DSource(DataSource):
                 return base_dataset.map(base_map_fn, self._num_parallel_calls)
 
             return aug_ds.interleave(params_map_fn,
-                                     cycle_length=self._num_combinations,
+                                     cycle_length=self._cycle_length,
                                      block_length=self._block_length)
 
         else:

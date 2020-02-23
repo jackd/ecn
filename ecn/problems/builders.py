@@ -339,6 +339,7 @@ def inception_multi_graph(features,
         # branched = layers.Dropout(dropout_rate)(branched)
         features = features + branched
 
+        # down sample conv
         link = in_stream.grid.link((3, 3), (2, 2), (1, 1))
         out_stream = comp.spike_threshold(in_stream,
                                           link,

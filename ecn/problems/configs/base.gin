@@ -1,7 +1,7 @@
 import kblocks.path
 import kblocks.framework.pipelines
 import kblocks.keras.optimizers
-import kblocks.framework.cached_source
+import kblocks.framework.cache
 import ecn.problems.utils
 
 trainable = @ecn.utils.multi_graph_trainable()
@@ -9,17 +9,6 @@ ecn.utils.multi_graph_trainable.build_fn = %build_fn
 ecn.utils.multi_graph_trainable.base_source = %base_source
 ecn.utils.multi_graph_trainable.batch_size = %batch_size
 ecn.utils.multi_graph_trainable.compiler = %compiler
-
-cache_dir = @cache_dir/kb.path.model_dir()
-
-cache_dir/kb.path.model_dir.variant_id = None
-cache_dir/kb.path.model_dir.run = None
-
-kb.framework.BasePipeline.cache_dir = %cache_dir
-kb.framework.BasePipeline.cache_repeats = %cache_repeats
-kb.framework.BasePipeline.clear_cache = %clear_cache
-kb.framework.BasePipeline.num_shards = %num_shards
-kb.framework.BasePipeline.use_cache = %use_cache
 
 ecn.utils.multi_graph_trainable.model_dir = %model_dir
 
@@ -41,9 +30,15 @@ target = 'final'
 
 TfConfig.jit = True
 use_cache = True
-cache_repeats = None
 clear_cache = False
-num_shards = None
+
+train_cache_dir = @train/cache/kb.path.model_dir()
+validation_cache_dir = @validation/cache/kb.path.model_dir()
+
+train/cache/kb.path.model_dir.run = None
+train/cache/kb.path.model_dir.variant_id = 'cache/train'
+validation/cache/kb.path.model_dir.run = None
+validation/cache/kb.path.model_dir.variant_id = 'cache/validation'
 
 # to define:
 # build_fn =

@@ -1,8 +1,8 @@
 import gin
 import tensorflow as tf
-import tensorflow_datasets as tfds
 from kblocks.framework.sources import TfdsSource
 from kblocks.framework.sources import BaseSource
+# tf.data.experimental.AUTOTUNE = 1  # HACK
 
 
 @gin.configurable(module='ecn.sources')

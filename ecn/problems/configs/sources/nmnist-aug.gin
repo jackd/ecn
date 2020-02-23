@@ -1,17 +1,32 @@
-import kblocks.framework.cached_source
+import kblocks.framework.cache
+import kblocks.framework.pipelines
 import ecn.problems.augment
 include 'nmnist.gin'
 
 base_source = @Augmented2DSource()
-Augmented2DSource.base_source = @nmnist_source2()
 
+Augmented2DSource.base_source = @nmnist_source()
 Augmented2DSource.flip_time = True
-cache_repeats = 2
+Augmented2DSource.cycle_length = 1
+Augmented2DSource.num_parallel_calls = 1
 
-kb.framework.TfdsSource.read_config = @tfds.ReadConfig()
-# tfds.ReadConfig.interleave_parallel_reads = 1
-# tfds.ReadConfig.interleave_block_length = 1
-use_cache = False
+nmnist_source.shuffle_files = False
+nmnist_source.read_config = @tfds.ReadConfig()
+tfds.ReadConfig.interleave_parallel_reads = 1
+tfds.ReadConfig.interleave_block_length = 1
 
+kb.framework.BasePipeline.cache_impl = {
+    'train': @train/RepeatCacheManager(),
+    'validation': @validation/BaseCacheManager(),
+}
+
+# train/RepeatCacheManager.manager_impl = @ShardedCacheManager
+# ShardedCacheManager.num_shards = 8
+
+train/RepeatCacheManager.cache_dir = %train_cache_dir
+validation/BaseCacheManager.cache_dir = %validation_cache_dir
+
+RepeatCacheManager.num_repeats = 2
+BaseCacheManager.preprocess = True
 
 problem_id = 'nmnist-aug'

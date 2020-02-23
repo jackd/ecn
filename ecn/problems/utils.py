@@ -72,10 +72,6 @@ def multi_graph_trainable(build_fn: Callable,
     source = PipelinedSource(base_source, pipeline)
     model = built.trained_model
     compiler(model)
-    if pipeline._use_cache:
-        with tf.Graph().as_default():
-            for split in ('train', 'validation'):
-                source.get_dataset(split)
     return Trainable(source, model, model_dir)
 
 
@@ -240,10 +236,12 @@ def benchmark_source(source_fn, build_fn, take=1000, batch_size=32):
 if __name__ == '__main__':
     from ecn.problems import builders
     from ecn.problems import sources
+    from ecn.problems import augment
 
     # build_fn = builders.simple_multi_graph
     build_fn = builders.inception_multi_graph
-    # source = sources.nmnist_source()
+    source = sources.nmnist_source()
+    source = augment.Augmented2DSource(source)
     # build_fn = builders.inception128_multi_graph
     # source = sources.cifar10_dvs_source()
     # build_fn = builders.simple1d_graph
@@ -252,7 +250,7 @@ if __name__ == '__main__':
     # multi_graph_trainable(build_fn, source, batch_size=2)
     # print('built successfully')
 
-    # vis_streams(build_fn, source)
+    vis_streams(build_fn, source)
     # vis_adjacency(build_fn, source)
     #     from ecn.problems.nmnist import simple_multi_graph
     #     from ecn.problems.nmnist import nmnist_source
@@ -263,5 +261,5 @@ if __name__ == '__main__':
     #     source = trainable.source
     #     for example in source:
     #         pass
-    source_fn = sources.nmnist_source
-    benchmark_source(source_fn, build_fn)
+    # source_fn = sources.nmnist_source
+    # benchmark_source(source_fn, build_fn)
