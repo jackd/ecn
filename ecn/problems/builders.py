@@ -130,7 +130,8 @@ def simple_multi_graph(features,
                        filters0: int = 32,
                        kt0: int = 4,
                        hidden_units: Sequence[int] = (128,),
-                       dropout_rate: float = 0.4):
+                       dropout_rate: float = 0.4,
+                       static_sizes=True):
     times = features['time']
     coords = features['coords']
     polarity = features['polarity']
@@ -141,14 +142,18 @@ def simple_multi_graph(features,
     grid = comp.Grid(grid_shape)
     link = grid.link((3, 3), (1, 1), (0, 0))
 
-    in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=5000)
+    in_stream = comp.SpatialStream(grid,
+                                   times,
+                                   coords,
+                                   min_mean_size=5000 if static_sizes else None)
     # in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=None)
 
-    out_stream = comp.spike_threshold(in_stream,
-                                      link,
-                                      decay_time=decay_time,
-                                      min_mean_size=1024,
-                                      **spike_kwargs)
+    out_stream = comp.spike_threshold(
+        in_stream,
+        link,
+        decay_time=decay_time,
+        min_mean_size=1024 if static_sizes else None,
+        **spike_kwargs)
 
     features = in_stream.prepare_model_inputs(polarity)
     features = tf.keras.layers.Lambda(lambda x: tf.identity(x.values))(features)
@@ -186,11 +191,12 @@ def simple_multi_graph(features,
         features = layers.Dropout(dropout_rate)(features)
 
         link = in_stream.grid.link((5, 5), (2, 2), (2, 2))
-        out_stream = comp.spike_threshold(in_stream,
-                                          link,
-                                          decay_time=decay_time,
-                                          min_mean_size=min_mean_size,
-                                          **spike_kwargs)
+        out_stream = comp.spike_threshold(
+            in_stream,
+            link,
+            decay_time=decay_time,
+            min_mean_size=min_mean_size if static_sizes else None,
+            **spike_kwargs)
 
         ds_convolver = comp.spatio_temporal_convolver(
             link,
@@ -211,10 +217,11 @@ def simple_multi_graph(features,
         decay_time *= 2
         filters *= 2
 
-    global_stream = comp.global_spike_threshold(in_stream,
-                                                decay_time=decay_time,
-                                                min_mean_size=32,
-                                                **spike_kwargs)
+    global_stream = comp.global_spike_threshold(
+        in_stream,
+        decay_time=decay_time,
+        min_mean_size=32 if static_sizes else None,
+        **spike_kwargs)
     flat_convolver = comp.flatten_convolver(in_stream, global_stream,
                                             decay_time)
     features = flat_convolver.convolve(features,
@@ -261,7 +268,8 @@ def inception_multi_graph(features,
                           filters0: int = 32,
                           kt0: int = 4,
                           hidden_units: Sequence[int] = (128,),
-                          dropout_rate: float = 0.4):
+                          dropout_rate: float = 0.4,
+                          static_sizes=True):
     times = features['time']
     coords = features['coords']
     polarity = features['polarity']
@@ -270,18 +278,22 @@ def inception_multi_graph(features,
     spike_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
 
     grid = comp.Grid(grid_shape)
-    link = grid.link((3, 3), (1, 1), (0, 0))
+    link = grid.link((3, 3), (1, 1), (1, 1))
     # link = grid.link((5, 5), (1, 1), (1, 1))
 
-    in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=5000)
+    in_stream = comp.SpatialStream(grid,
+                                   times,
+                                   coords,
+                                   min_mean_size=5000 if static_sizes else None)
     # in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=None)
 
-    out_stream = comp.spike_threshold(in_stream,
-                                      link,
-                                      decay_time=decay_time,
-                                      min_mean_size=2048,
-                                      reset_potential=reset_potential,
-                                      threshold=threshold)
+    out_stream = comp.spike_threshold(
+        in_stream,
+        link,
+        decay_time=decay_time,
+        min_mean_size=2048 if static_sizes else None,
+        reset_potential=reset_potential,
+        threshold=threshold)
 
     features = in_stream.prepare_model_inputs(polarity)
     features = tf.keras.layers.Lambda(lambda x: tf.identity(x.values))(features)
@@ -341,11 +353,12 @@ def inception_multi_graph(features,
 
         # down sample conv
         link = in_stream.grid.link((3, 3), (2, 2), (1, 1))
-        out_stream = comp.spike_threshold(in_stream,
-                                          link,
-                                          decay_time=decay_time,
-                                          min_mean_size=min_mean_size,
-                                          **spike_kwargs)
+        out_stream = comp.spike_threshold(
+            in_stream,
+            link,
+            decay_time=decay_time,
+            min_mean_size=min_mean_size if static_sizes else None,
+            **spike_kwargs)
 
         filters *= 2
         ds_convolver = comp.spatio_temporal_convolver(
@@ -366,10 +379,11 @@ def inception_multi_graph(features,
         del out_stream
         decay_time *= 2
 
-    global_stream = comp.global_spike_threshold(in_stream,
-                                                decay_time=decay_time,
-                                                min_mean_size=64,
-                                                **spike_kwargs)
+    global_stream = comp.global_spike_threshold(
+        in_stream,
+        decay_time=decay_time,
+        min_mean_size=64 if static_sizes else None,
+        **spike_kwargs)
     flat_convolver = comp.flatten_convolver(in_stream, global_stream,
                                             decay_time)
     features = flat_convolver.convolve(features,

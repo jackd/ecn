@@ -181,7 +181,8 @@ class GraphBuilder(object):
 
     def build(self,
               inputs_structure=None,
-              extra_outputs: Optional[Iterable[TensorLike]] = None) -> Callable:
+              extra_outputs: Optional[Iterable[TensorLike]] = None
+             ) -> Optional[Callable]:
         inputs = self._inputs
         if inputs_structure is not None:
             inputs = tf.nest.pack_sequence_as(inputs_structure,
@@ -193,6 +194,10 @@ class GraphBuilder(object):
             for x in tf.nest.flatten(extra_outputs, expand_composites=True):
                 self._validate_graph(x)
             outputs = (outputs, *extra_outputs)
+
+        # If no outputs, return None. Maybe this should raise an error?
+        if len(tf.nest.flatten(outputs, expand_composites=True)) == 0:
+            return None
 
         return subgraph(self.graph.as_graph_def(add_shapes=True), inputs,
                         outputs)
@@ -257,27 +262,29 @@ class ModelBuilder(object):
 
 class BuiltMultiGraph(object):
 
-    def __init__(self, pre_cache_map: Callable, pre_batch_map: Callable,
-                 post_batch_map: Callable, trained_model: tf.keras.Model):
+    def __init__(self, pre_cache_map: Optional[Callable],
+                 pre_batch_map: Optional[Callable],
+                 post_batch_map: Optional[Callable],
+                 trained_model: Optional[tf.keras.Model]):
         self._pre_cache_map = pre_cache_map
         self._pre_batch_map = pre_batch_map
         self._post_batch_map = post_batch_map
         self._trained_model = trained_model
 
     @property
-    def pre_cache_map(self):
+    def pre_cache_map(self) -> Optional[Callable]:
         return self._pre_cache_map
 
     @property
-    def pre_batch_map(self):
+    def pre_batch_map(self) -> Optional[Callable]:
         return self._pre_batch_map
 
     @property
-    def post_batch_map(self):
+    def post_batch_map(self) -> Optional[Callable]:
         return self._post_batch_map
 
     @property
-    def trained_model(self):
+    def trained_model(self) -> Optional[tf.keras.Model]:
         return self._trained_model
 
 
@@ -416,8 +423,6 @@ class MultiGraphBuilder(MultiGraphContext):
             out = _placeholder_like(x)
             self._pre_batch_builder.add_input(out)
         assert (x.shape is not None)
-        if len(self._pre_cache_builder._inputs) == 3:
-            raise Exception()
         return out
 
     def batch(self, x: TensorLike) -> TensorLike:

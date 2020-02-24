@@ -3,7 +3,19 @@ import tensorflow as tf
 from ecn.ops import ragged
 
 
-class name(tf.test.TestCase):
+class RaggedOpsTest(tf.test.TestCase):
+
+    def test_ragged_csr_transpose_empty_end(self):
+        # grid = comp.Grid((7,))
+        # link = grid.link((2,), (2,), (0,))
+
+        indices = tf.constant([0, 1, 2, 3, 4, 5])
+        splits = tf.constant([0, 2, 4, 6])
+        values = tf.range(6)
+        indices, splits, values = self.evaluate(
+            ragged.transpose_csr(indices, splits, values, nrows_out=7))
+        np.testing.assert_equal(indices, [0, 0, 1, 1, 2, 2])
+        np.testing.assert_equal(splits, [0, 1, 2, 3, 4, 5, 6, 6])
 
     def test_transpose_csr(self):
         i = [0, 1, 1, 2, 2, 2, 3, 5]

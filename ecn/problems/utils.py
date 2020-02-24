@@ -71,7 +71,8 @@ def multi_graph_trainable(build_fn: Callable,
                             **pipeline_kwargs)
     source = PipelinedSource(base_source, pipeline)
     model = built.trained_model
-    compiler(model)
+    if compiler is not None:
+        compiler(model)
     return Trainable(source, model, model_dir)
 
 

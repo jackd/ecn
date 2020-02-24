@@ -6,10 +6,12 @@ ECN_CONFIG_DIR = os.path.realpath(
 
 try_register_config_dir('ECN_CONFIG', ECN_CONFIG_DIR)
 
+from . import augment
 from . import builders
 from . import sources
 
 __all__ = [
+    'augment',
     'builders',
     'sources',
     'ECN_CONFIG_DIR',

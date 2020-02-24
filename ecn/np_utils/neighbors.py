@@ -288,7 +288,7 @@ def compute_neighbors(
         )
 
     max_neighbors = spatial_buffer_size * num_out_events
-    grid_size = np.max(grid_indices) + 1
+    grid_size = max(np.max(in_coords), np.max(grid_indices)) + 1
 
     buffer_start_stops = np.zeros((grid_size, 2), dtype=np.int64)
     buffer_values = np.empty((grid_size, spatial_buffer_size), dtype=np.int64)

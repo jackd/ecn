@@ -140,6 +140,29 @@ class GridTest(unittest.TestCase):
         np.testing.assert_equal(shape, (2,))
         np.testing.assert_equal(coords, np.expand_dims([-1, 1], axis=-1))
 
+    def test_sparse_neighborhood_1d(self):
+        in_shape = np.array((7,))
+        kernel_shape = np.array((3,))
+        strides = np.array((2,))
+        padding = np.array((0,))
+        p, indices, splits, out_shape = grid.sparse_neighborhood(
+            in_shape, kernel_shape, strides, padding=padding)
+        np.testing.assert_equal(out_shape, (3,))
+        np.testing.assert_equal(p, tuple(range(3)) * 3)
+        np.testing.assert_equal(indices, [0, 1, 2, 2, 3, 4, 4, 5, 6])
+        np.testing.assert_equal(splits, [0, 3, 6, 9])
+
+        in_shape = np.array((7,))
+        kernel_shape = np.array((2,))
+        strides = np.array((2,))
+        padding = np.array((0,))
+        p, indices, splits, out_shape = grid.sparse_neighborhood(
+            in_shape, kernel_shape, strides, padding=padding)
+        np.testing.assert_equal(out_shape, (3,))
+        np.testing.assert_equal(p, tuple(range(2)) * 3)
+        np.testing.assert_equal(indices, [0, 1, 2, 3, 4, 5])
+        np.testing.assert_equal(splits, [0, 2, 4, 6])
+
     def test_sparse_neighborhood(self):
         in_shape = np.array((4, 5), dtype=np.int64)
         kernel_shape = np.array((3, 3), dtype=np.int64)

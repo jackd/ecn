@@ -19,6 +19,14 @@ kb.path.model_dir.model_id = %model_id
 kb.path.model_dir.variant_id = %variant_id
 kb.path.model_dir.run = %run
 
+kb.framework.BasePipeline.clear_cache = %clear_cache
+# kb.framework.BaseCacheManager.preprocess = True
+kb.framework.BasePipeline.cache_managers = @kb.framework.cache_managers()
+kb.framework.cache_managers.root_dir = @cache/kb.path.model_dir()
+cache/kb.path.model_dir.run = None
+cache/kb.path.model_dir.variant_id = 'cache'
+
+
 model_id = 'default_model'
 variant_id = 'default_variant'
 run = 0
@@ -34,11 +42,6 @@ clear_cache = False
 
 train_cache_dir = @train/cache/kb.path.model_dir()
 validation_cache_dir = @validation/cache/kb.path.model_dir()
-
-train/cache/kb.path.model_dir.run = None
-train/cache/kb.path.model_dir.variant_id = 'cache/train'
-validation/cache/kb.path.model_dir.run = None
-validation/cache/kb.path.model_dir.variant_id = 'cache/validation'
 
 # to define:
 # build_fn =

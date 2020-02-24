@@ -85,7 +85,9 @@ def spike_threshold(times: IntArray,
     for i in range(in_events):
         t = times[i]
         c = coords[i]
-        row = grid_indices[grid_splits[c]:grid_splits[c + 1]]
+        lower = grid_splits[c]
+        upper = grid_splits[c + 1]
+        row = grid_indices[lower:upper]
         size = row.size
         if size == 0:
             continue

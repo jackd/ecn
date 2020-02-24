@@ -143,10 +143,8 @@ def simple_multi_graph(features,
     return outputs, labels, weights
 
 
-# source = sources.nmnist_source(
-#     read_config=tfds.ReadConfig(
-#         interleave_block_length=1, interleave_parallel_reads=1))
-source = sources.nmnist_source2()
+source = sources.nmnist_source(read_config=tfds.ReadConfig(
+    interleave_block_length=1, interleave_parallel_reads=1))
 split = 'train'
 
 # build_fn = simple_multi_graph
