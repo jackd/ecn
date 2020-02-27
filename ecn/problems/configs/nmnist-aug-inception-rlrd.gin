@@ -1,0 +1,15 @@
+import kblocks.keras.callbacks
+include 'nmnist-aug-inception.gin'
+
+epochs = 200
+
+kb.framework.fit.callbacks = [@tf.keras.callbacks.ReduceLROnPlateau()]
+ReduceLROnPlateau.patience = 5
+ReduceLROnPlateau.factor = 0.2
+ReduceLROnPlateau.monitor = 'final_acc'
+ReduceLROnPlateau.mode = 'max'
+
+# inception_multi_graph.static_sizes = False
+# TfConfig.jit = False
+
+variant_id = 'rlrd'

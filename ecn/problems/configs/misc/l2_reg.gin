@@ -3,6 +3,7 @@ import kblocks.keras.regularizers
 import ecn.layers.conv
 
 tf.keras.layers.Dense.kernel_regularizer = %l2_reg
+tf.keras.layers.Conv3D.kernel_regularizer = %l2_reg
 ecn.layers.EventConvBase.kernel_regularizer = %l2_reg
 
 l2_reg = @tf.keras.regularizers.l2()

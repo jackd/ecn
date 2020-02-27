@@ -1,0 +1,10 @@
+import ecn.problems.sources
+import ecn.problems.utils
+
+base_source = @ncars_source()
+batch_size = 8
+epochs = 1000
+shuffle_buffer = 512
+
+compiler = @ecn.utils.compile_stream_binary_classifier
+problem_id = 'ncars'

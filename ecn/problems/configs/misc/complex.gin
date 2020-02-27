@@ -1,0 +1,3 @@
+import ecn.layers.conv
+ecn.layers.EventConvBase.is_complex = %is_complex
+is_complex = True

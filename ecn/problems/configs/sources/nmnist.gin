@@ -3,5 +3,6 @@ import ecn.problems.sources
 base_source = @nmnist_source()
 batch_size = 32
 epochs = 100
+shuffle_buffer = 1024
 
 problem_id = 'nmnist'

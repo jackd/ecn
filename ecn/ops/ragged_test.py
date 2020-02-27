@@ -34,6 +34,20 @@ class RaggedOpsTest(tf.test.TestCase):
         np.testing.assert_equal(actual_indices, expected_i)
         np.testing.assert_equal(actual_values, [1, 0, 3, 6, 2, 4, 5, 7])
 
+    def test_transpose_csr_empty(self):
+        indices = []
+        splits = [0]
+        values = []
+
+        actual_indices, actual_splits, actual_values = self.evaluate(
+            ragged.transpose_csr(indices, splits, values))
+        expected_indices = []
+        expected_splits = [0]
+        expected_values = []
+        np.testing.assert_equal(actual_indices, expected_indices)
+        np.testing.assert_equal(actual_splits, expected_splits)
+        np.testing.assert_equal(actual_values, expected_values)
+
 
 if __name__ == '__main__':
     tf.test.main()

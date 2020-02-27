@@ -14,6 +14,10 @@ constraints = tf.keras.constraints
 activations = tf.keras.activations
 
 
+def _complex(real, imag=None):
+    return real if imag is None else tf.complex(real, imag)
+
+
 @gin.configurable(module='ecn.layers')
 class EventConvBase(layers.Layer):
 
@@ -33,12 +37,19 @@ class EventConvBase(layers.Layer):
                  decay_constraint='non_neg',
                  kernel_constraint=None,
                  bias_constraint=None,
+                 imag_decay_initializer='zeros',
+                 imag_kernel_initializer='glorot_uniform',
+                 imag_bias_initializer='zeros',
+                 imag_decay_regularizer=None,
+                 imag_kernel_regularizer=None,
+                 imag_bias_regularizer=None,
+                 imag_decay_constraint=None,
+                 imag_kernel_constraint=None,
+                 imag_bias_constraint=None,
                  **kwargs):
         super(EventConvBase, self).__init__(
             activity_regularizer=regularizers.get(activity_regularizer),
             **kwargs)
-        if is_complex:
-            raise NotImplementedError('TODO')
         self.filters = filters
         self.temporal_kernel_size = temporal_kernel_size
         self.is_complex = is_complex
@@ -60,6 +71,18 @@ class EventConvBase(layers.Layer):
         self.decay_constraint = constraints.get(decay_constraint)
         self.kernel_constraint = constraints.get(kernel_constraint)
         self.bias_constraint = constraints.get(bias_constraint)
+
+        self.imag_decay_initializer = initializers.get(imag_decay_initializer)
+        self.imag_kernel_initializer = initializers.get(imag_kernel_initializer)
+        self.imag_bias_initializer = initializers.get(imag_bias_initializer)
+
+        self.imag_decay_regularizer = regularizers.get(imag_decay_regularizer)
+        self.imag_kernel_regularizer = regularizers.get(imag_kernel_regularizer)
+        self.imag_bias_regularizer = regularizers.get(imag_bias_regularizer)
+
+        self.imag_decay_constraint = constraints.get(imag_decay_constraint)
+        self.imag_kernel_constraint = constraints.get(imag_kernel_constraint)
+        self.imag_bias_constraint = constraints.get(imag_bias_constraint)
 
         self.supports_masking = True
 
@@ -94,7 +117,25 @@ class EventConvBase(layers.Layer):
             'kernel_constraint':
                 constraints.serialize(self.kernel_constraint),
             'bias_constraint':
-                constraints.serialize(self.bias_constraint)
+                constraints.serialize(self.bias_constraint),
+            'imag_decay_initializer':
+                initializers.serialize(self.imag_decay_initializer),
+            'imag_kernel_initializer':
+                initializers.serialize(self.imag_kernel_initializer),
+            'imag_bias_initializer':
+                initializers.serialize(self.imag_bias_initializer),
+            'imag_decay_regularizer':
+                regularizers.serialize(self.imag_decay_regularizer),
+            'imag_kernel_regularizer':
+                regularizers.serialize(self.imag_kernel_regularizer),
+            'imag_bias_regularizer':
+                regularizers.serialize(self.imag_bias_regularizer),
+            'imag_decay_constraint':
+                constraints.serialize(self.imag_decay_constraint),
+            'imag_kernel_constraint':
+                constraints.serialize(self.imag_kernel_constraint),
+            'imag_bias_constraint':
+                constraints.serialize(self.imag_bias_constraint)
         }
         base_config = super(EventConvBase, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -122,36 +163,74 @@ class EventConvBase(layers.Layer):
         if self.built:
             return
 
-        self.decay = self.add_weight('decay',
-                                     shape=self._decay_shape(input_shape),
-                                     initializer=self.decay_initializer,
-                                     regularizer=self.decay_regularizer,
-                                     constraint=self.decay_constraint)
-        self.kernel = self.add_weight('kernel',
-                                      shape=self._kernel_shape(input_shape),
-                                      initializer=self.kernel_initializer,
-                                      regularizer=self.kernel_regularizer,
-                                      constraint=self.kernel_constraint,
-                                      dtype=self.dtype,
-                                      trainable=True)
+        decay_shape = self._decay_shape(input_shape)
+        self.decay_real = self.add_weight('decay_real',
+                                          shape=decay_shape,
+                                          initializer=self.decay_initializer,
+                                          regularizer=self.decay_regularizer,
+                                          constraint=self.decay_constraint)
+
+        kernel_shape = self._kernel_shape(input_shape)
+        self.kernel_real = self.add_weight('kernel_real',
+                                           shape=kernel_shape,
+                                           initializer=self.kernel_initializer,
+                                           regularizer=self.kernel_regularizer,
+                                           constraint=self.kernel_constraint,
+                                           dtype=self.dtype,
+                                           trainable=True)
         if self.use_bias:
-            self.bias = self.add_weight('bias',
-                                        shape=[self.filters],
-                                        initializer=self.bias_initializer,
-                                        regularizer=self.bias_regularizer,
-                                        constraint=self.bias_constraint,
-                                        dtype=self.dtype,
-                                        trainable=True)
+            self.bias_real = self.add_weight('bias_real',
+                                             shape=[self.filters],
+                                             initializer=self.bias_initializer,
+                                             regularizer=self.bias_regularizer,
+                                             constraint=self.bias_constraint,
+                                             dtype=self.dtype,
+                                             trainable=True)
         else:
-            self.bias = None
+            self.bias_real = None
+
+        if self.is_complex:
+            self.decay_imag = self.add_weight(
+                'decay_imag',
+                shape=decay_shape,
+                initializer=self.imag_decay_initializer,
+                regularizer=self.imag_decay_regularizer,
+                constraint=self.imag_decay_constraint)
+
+            self.kernel_imag = self.add_weight(
+                'kernel_imag',
+                shape=kernel_shape,
+                initializer=self.imag_kernel_initializer,
+                regularizer=self.imag_kernel_regularizer,
+                constraint=self.imag_kernel_constraint,
+                dtype=self.dtype,
+                trainable=True)
+            if self.use_bias:
+                self.bias_imag = self.add_weight(
+                    'bias_imag',
+                    shape=[self.filters],
+                    initializer=self.imag_bias_initializer,
+                    regularizer=self.imag_bias_regularizer,
+                    constraint=self.imag_bias_constraint,
+                    dtype=self.dtype,
+                    trainable=True)
+        else:
+            self.decay_imag = None
+            self.kernel_imag = None
+            self.bias_imag = None
         super(EventConvBase, self).build(input_shape)
 
+    @property
+    def decay(self):
+        return _complex(self.decay_real, self.decay_imag)
 
-def _spatial_size(input_shape) -> int:
-    if len(input_shape) == 2:
-        return input_shape[1][-1]
-    else:
-        return len(input_shape) - 1
+    @property
+    def kernel(self):
+        return _complex(self.kernel_real, self.kernel_imag)
+
+    @property
+    def bias(self):
+        return _complex(self.bias_real, self.bias_imag)
 
 
 @gin.configurable(module='ecn.layers')
@@ -328,6 +407,20 @@ class TemporalEventConv(EventConvBase):
         return self._finalize(features)
 
 
+@gin.configurable(module='ecn.layers')
+class TemporalEventPooling(TemporalEventConv):
+
+    def call(self, inputs):
+        features, dt, value_rowids, batch_size = inputs
+        features = conv_ops.temporal_event_pooling(features=features,
+                                                   dt=dt,
+                                                   value_rowids=value_rowids,
+                                                   batch_size=batch_size,
+                                                   kernel=self.kernel,
+                                                   decay=self.decay)
+        return self._finalize(features)
+
+
 def spatio_temporal_event_conv(
         features: Optional[tf.Tensor],
         dt: Union[tf.SparseTensor, Iterable[tf.SparseTensor]],
@@ -367,25 +460,33 @@ def temporal_event_conv(
 
 
 if __name__ == '__main__':
+    import numpy as np
     f_in = 7
     n_in = 11
     n_out = 5
     n_e = 23
     sk = 3
-    i = tf.random.uniform((n_e,), minval=0, maxval=n_out, dtype=tf.int64)
-    j = tf.random.uniform((n_e,), minval=0, maxval=n_in, dtype=tf.int64)
-    d = tf.random.uniform((n_e,), minval=0, maxval=sk, dtype=tf.int64)
-    dij = tf.stack((d, i, j), axis=-1)
-    neigh = tf.SparseTensor(dij, tf.random.uniform((n_e,), dtype=tf.float32),
-                            (sk, n_out, n_in))
-    layer = SpatioTemporalEventConv(2, 3, 4)
+    is_complex = True
+    neighs = []
+    for _ in range(sk):
+        n = np.random.randint(n_e) + 1
+        i = tf.random.uniform((n,), minval=0, maxval=n_out, dtype=tf.int64)
+        j = tf.random.uniform((n,), minval=0, maxval=n_in, dtype=tf.int64)
+        neighs.append(
+            tf.SparseTensor(tf.stack((i, j), axis=-1),
+                            tf.random.uniform((n,), dtype=tf.float32),
+                            [n_out, n_in]))
+
+    filters = 2
+    tk = 5
+    layer = SpatioTemporalEventConv(filters, tk, sk, is_complex=is_complex)
     features = tf.random.normal((n_in, f_in))
-    layer([features, neigh])
+    layer([features, *neighs])
     print('SpatioTemporalEventConv successfully built')
 
-    layer = TemporalEventConv(2, 3)
-    ij = tf.stack((i, j), axis=-1)
-    neigh = tf.SparseTensor(ij, tf.random.uniform((n_e,), dtype=tf.float32),
-                            (n_out, n_in))
-    layer([features, neigh])
-    print('TemporalEventConv successfully built')
+    # layer = TemporalEventConv(2, 3)
+    # ij = tf.stack((i, j), axis=-1)
+    # neigh = tf.SparseTensor(ij, tf.random.uniform((n_e,), dtype=tf.float32),
+    #                         (n_out, n_in))
+    # layer([features, neigh])
+    # print('TemporalEventConv successfully built')

@@ -17,7 +17,7 @@ FloatTensor = tf.Tensor
 #     return ravel_multi_index(diff, stride)
 
 
-def ravel_multi_index(indices, dims: Union[int, tf.Tensor], axis=-1):
+def ravel_multi_index(indices, dims: tf.Tensor, axis=-1):
     if axis < 0:
         axis += indices.shape.ndims
     if axis < 0:
@@ -26,11 +26,8 @@ def ravel_multi_index(indices, dims: Union[int, tf.Tensor], axis=-1):
                 axis))
 
     dtype = indices.dtype
-    if isinstance(dims, int):
-        dims_ = tf.convert_to_tensor(dims, dtype=dtype)
-    else:
-        dims_ = dims
-    assert (isinstance(dims_, tf.Tensor))
+
+    dims_ = tf.convert_to_tensor(dims, dtype_hint=dtype)
     if dims_.shape.ndims == 0:
         ndim = tf.shape(indices, out_type=dtype)[axis]
         # scalar
@@ -79,7 +76,7 @@ def shift_grid_coords(out_coords, kernel_shape, strides, padding):
 
 
 def _valid_partitions(coords, offset, in_shape):
-    out_size = coords.shape[0]
+    out_size = tf.shape(coords)[0]
     coords = tf.expand_dims(coords, axis=-2) + offset
     valid = tf.logical_and(tf.reduce_all(coords >= 0, axis=-1),
                            tf.reduce_all(coords < in_shape, axis=-1))

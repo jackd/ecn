@@ -122,7 +122,7 @@ def compute_full_neighbors(in_times: IntArray,
                 max_neighbors *= 2
 
         splits[o + 1] = ii
-    return partitions[:ii], indices[:ii], splits[:ii]
+    return partitions[:ii], indices[:ii], splits
 
 
 @nb.njit()
@@ -148,15 +148,15 @@ def compute_pointwise_neighbors(
     num_out_events = out_times.size
     num_in_events = in_times.size
 
-    index_splits = np.empty((num_out_events + 1,), dtype=dtype)
-    index_splits[0] = 0
-
     if num_out_events == 0 or num_in_events == 0:
-        index_splits[1:] = 0
+        index_splits = np.zeros((num_out_events + 1,), dtype=dtype)
         return (
             np.empty((0,), dtype=dtype),
             index_splits,
         )
+
+    index_splits = np.empty((num_out_events + 1,), dtype=dtype)
+    index_splits[0] = 0
 
     max_neighbors = spatial_buffer_size * num_out_events
     grid_size = max(np.max(in_coords), np.max(out_coords)) + 1
@@ -276,16 +276,16 @@ def compute_neighbors(
     num_out_events = out_times.size
     num_in_events = in_times.size
 
-    index_splits = np.empty((num_out_events + 1,), dtype=grid_indices.dtype)
-    index_splits[0] = 0
-
     if num_out_events == 0 or num_in_events == 0:
-        index_splits[1:] = 0
+        index_splits = np.zeros((num_out_events + 1,), dtype=grid_indices.dtype)
         return (
             np.empty((0,), dtype=grid_partitions.dtype),
             np.empty((0,), dtype=grid_indices.dtype),
             index_splits,
         )
+
+    index_splits = np.empty((num_out_events + 1,), dtype=grid_indices.dtype)
+    index_splits[0] = 0
 
     max_neighbors = spatial_buffer_size * num_out_events
     grid_size = max(np.max(in_coords), np.max(grid_indices)) + 1

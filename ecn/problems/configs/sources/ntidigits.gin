@@ -4,4 +4,10 @@ base_source = @ntidigits_source()
 batch_size = 32
 epochs = 100
 
+TfConfig.jit = False
+validation_freq = 5
+
+BaseCacheManager.preprocess = True
+shuffle_buffer = 1024
+
 problem_id = 'ntidigits'

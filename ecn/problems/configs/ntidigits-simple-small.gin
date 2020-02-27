@@ -1,0 +1,11 @@
+include 'ntidigits-simple.gin'
+include 'misc/l2_reg.gin'
+
+simple1d_graph.filters0 = 16
+simple1d_graph.kt0 = 4
+simple1d_graph.kernel_size = 5
+simple1d_graph.hidden_units = (128,)
+simple1d_graph.initial_size = 2048
+TfConfig.jit = False
+
+model_id = 'simple-small'

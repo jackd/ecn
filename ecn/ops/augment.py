@@ -96,14 +96,31 @@ def augment(
            for b in (flip_lr, flip_ud, flip_time)) and rotate_limits is None:
         return time, coords, polarity, mask
     if flip_lr is not False or flip_ud is not False:
+        # autograph complains about lambdas
+        def flipx():
+            return grid_shape[0] - 1 - x
+
+        def no_flipx():
+            return x
+
+        def flipy():
+            return grid_shape[1] - 1 - y
+
+        def no_flipy():
+            return y
+
         x, y = tf.unstack(coords, axis=-1)
-        x = smart_cond(to_bool(flip_lr), grid_shape[0] - 1 - x, x)
-        y = smart_cond(to_bool(flip_ud), grid_shape[1] - 1 - y, y)
+        x = smart_cond(to_bool(flip_lr), flipx, no_flipx)
+        y = smart_cond(to_bool(flip_ud), flipy, no_flipy)
         coords = tf.stack((x, y), axis=-1)
 
-    time, coords, polarity = smart_cond(
-        to_bool(flip_time), lambda: reverse_time(time, coords, polarity),
-        lambda: (time, coords, polarity))
+    def flipt():
+        return reverse_time(time, coords, polarity)
+
+    def no_flipt():
+        return (time, coords, polarity)
+
+    time, coords, polarity = smart_cond(to_bool(flip_time), flipt, no_flipt)
 
     if rotate_limits is not None:
         min_rot, max_rot = rotate_limits

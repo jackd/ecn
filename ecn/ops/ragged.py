@@ -34,10 +34,9 @@ def transpose_csr(indices: IntTensor,
                                            row_indices,
                                            nrows=nrows_out,
                                            validate=validate)
-    return rt.values, rt.row_splits, values
-    # row_splits = tf.ragged.segment_ids_to_row_splits(row_indices,
-    #                                                  out_type=indices.dtype)
-    # return col_indices, row_splits, values
+    indices = rt.values
+    splits = rt.row_splits
+    return indices, splits, values
 
 
 def mask_rows(values: tf.Tensor, row_splits: IntTensor,

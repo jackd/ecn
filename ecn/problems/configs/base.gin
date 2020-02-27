@@ -2,6 +2,7 @@ import kblocks.path
 import kblocks.framework.pipelines
 import kblocks.keras.optimizers
 import kblocks.framework.cache
+import kblocks.framework.cache.tfrecords
 import ecn.problems.utils
 
 trainable = @ecn.utils.multi_graph_trainable()
@@ -20,9 +21,12 @@ kb.path.model_dir.variant_id = %variant_id
 kb.path.model_dir.run = %run
 
 kb.framework.BasePipeline.clear_cache = %clear_cache
-# kb.framework.BaseCacheManager.preprocess = True
 kb.framework.BasePipeline.cache_managers = @kb.framework.cache_managers()
+kb.framework.BasePipeline.shuffle_buffer = %shuffle_buffer
+kb.framework.BaseCacheManager.preprocess = True
 kb.framework.cache_managers.root_dir = @cache/kb.path.model_dir()
+kb.framework.cache_managers.train_impl = @TFRecordsCacheManager
+kb.framework.cache_managers.validation_impl = @TFRecordsCacheManager
 cache/kb.path.model_dir.run = None
 cache/kb.path.model_dir.variant_id = 'cache'
 
@@ -36,8 +40,7 @@ ecn.utils.compile_stream_classifier.optimizer = @tf.keras.optimizers.Adam()
 ecn.utils.compile_stream_classifier.target = %target
 target = 'final'
 
-TfConfig.jit = True
-use_cache = True
+# TfConfig.jit = True
 clear_cache = False
 
 train_cache_dir = @train/cache/kb.path.model_dir()

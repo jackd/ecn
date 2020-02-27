@@ -1,0 +1,6 @@
+import ecn.problems.utils
+import kblocks.keras.optimizers
+compile_stream_classifier.optimizer = @SGD()
+SGD.learning_rate = 1e-2
+SGD.momentum = 0.99
+SGD.nesterov = True

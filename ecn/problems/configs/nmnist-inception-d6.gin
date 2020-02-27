@@ -1,0 +1,2 @@
+include 'nmnist-inception.gin'
+inception_multi_graph.dropout_rate = 0.6

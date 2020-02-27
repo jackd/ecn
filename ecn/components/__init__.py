@@ -4,8 +4,11 @@ import numpy as np
 import tensorflow as tf
 
 from kblocks.ops.ragged import pre_batch_ragged, post_batch_ragged
+from kblocks.keras import layers
 import kblocks.ops.sparse as sparse_ops
 from kblocks.ops import repeat as tf_repeat
+from kblocks.extras.layers import shape as shape_layers
+from kblocks.extras.layers import ragged as ragged_layers
 
 from ecn.ops import spike as spike_ops
 from ecn.ops import neighbors as neigh_ops
@@ -40,6 +43,31 @@ S0 = TypeVar('S', bound='Stream')
 S1 = TypeVar('S', bound='Stream')
 
 
+def _normalize_coords(coords, shape):
+    """Normalize ravelled coordinates, maintaining aspect ratio."""
+    shape = tf.convert_to_tensor(shape, dtype=coords.dtype)
+    coords = grid_ops.unravel_index_transpose(coords, shape)
+    coords = coords - shape // 2
+    scale = tf.cast(tf.reduce_max(shape), tf.float32) / 2
+    return tf.cast(coords, tf.float32) / scale
+
+
+def _final_features(args):
+    features, row_lengths, row_ends = args
+    final = tf.gather(features, row_ends)
+    return tf.where(tf.equal(row_lengths, 0), tf.zeros_like(final), final)
+
+
+def to_nearest_power(x, base=2):
+    x = tf.convert_to_tensor(x, dtype_hint=tf.int64)
+    base = tf.convert_to_tensor(base, dtype_hint=x.dtype)
+    assert (x.dtype.is_integer)
+    return base**tf.cast(
+        tf.math.ceil(
+            tf.math.log(tf.cast(x, tf.float32)) /
+            tf.math.log(tf.cast(base, tf.float32))), x.dtype)
+
+
 def maybe_cast(tensor, dtype):
     if tensor.dtype != dtype:
         return tf.cast(tensor, dtype)
@@ -72,7 +100,10 @@ class Grid(object):
         self._static_shape = (None
                               if isinstance(shape, tf.Tensor) else tuple(shape))
         with mg.pre_cache_context():
-            self._shape = tf.convert_to_tensor(shape, dtype=dtype)
+            if isinstance(shape, tf.Tensor):
+                self._shape = maybe_cast(shape, dtype=dtype)
+            else:
+                self._shape = tf.convert_to_tensor(shape, dtype=dtype)
             self._size = tf.math.reduce_prod(self._shape)
         self._shape.shape.assert_has_rank(1)
 
@@ -219,6 +250,7 @@ class Stream(object):
     def __init__(self,
                  times: IntTensor,
                  min_mean_size: Optional[int] = None,
+                 bucket_sizes: bool = True,
                  dtype=DTYPE):
         self._dtype = dtype
         mg.assert_is_pre_cache(times)
@@ -227,8 +259,15 @@ class Stream(object):
 
         self._min_mean_size = min_mean_size
         self._batched = False
-        self._model_row_ends = None
         self._size = None
+        self._model_row_ends = None
+        self._model_row_splits = None
+        self._model_value_rowids = None
+        self._model_row_lengths = None
+        self._model_times = None
+        self._model_batch_size = None
+
+        self._bucket_sizes = bucket_sizes
 
         Stream._publisher.add(self)
 
@@ -255,11 +294,17 @@ class Stream(object):
                                     axis=0)
         return self._size
 
+    @property
+    def cached_times(self):
+        self._batch()
+        return self._cached_times
+
     def _batch(self):
         if self._batched:
             return
 
         times = mg.cache(self._times)
+        self._cached_times = times
         with mg.pre_batch_context():
             times = pre_batch_ragged(times, row_splits_dtype=tf.int64)
 
@@ -267,6 +312,7 @@ class Stream(object):
         with mg.post_batch_context():
             times = post_batch_ragged(times, validate=False)
             self._batched_times = times.flat_values
+            self._value_rowids = times.value_rowids()
             self._row_splits = times.row_splits
             # self._row_starts = times.row_starts()
             # self._valid_size = self._row_splits[-1]
@@ -281,20 +327,80 @@ class Stream(object):
 
             self._batch_size = tf.size(self._row_lengths, out_type=tf.int64)
 
-            if self._min_mean_size is None:
+            if self._bucket_sizes:
+                self._batched_size = to_nearest_power(self._valid_size, 2)
+                self._padding = self._batched_size - self._valid_size
+            else:
                 self._batched_size = self._valid_size
                 self._padding = None
-            else:
-                self._batched_size = tf.maximum(
-                    self._batch_size * self.min_mean_size, self._valid_size)
-                self._padding = self._batched_size - self._valid_size
+
+            # if self._min_mean_size is None:
+            #     self._batched_size = self._valid_size
+            #     self._padding = None
+            # else:
+            #     self._batched_size = to_nearest_power(self._valid_size, 2)
+            #     # min_size = self._batch_size * self.min_mean_size
+            #     # factor = (tf.cast(valid_size, tf.float32) /
+            #     #           tf.cast(min_size, tf.float32))
+            #     # self._batched_size = tf.maximum(min_size, self._valid_size)
+            #     self._padding = self._batched_size - self._valid_size
 
         self._batched = True
+
+    def frame_indices(self, t_starts, t_ends, num_frames: int, dtype=None):
+        """
+        Returns flat batched frame indices in t_start, t_end.
+
+        Assumes t_starts <= t < t_ends
+
+        Args:
+            t_starts: [batch_size] ints, batched
+            t_ends: [batch_size] ints, batched
+
+        Returns:
+            frame_indices: [batched_sized] ints.
+        """
+        if dtype is None:
+            dtype = self.dtype
+        if t_starts is not None:
+            mg.assert_is_post_batch(t_starts)
+            t_starts.shape.assert_has_rank(1)
+
+        mg.assert_is_post_batch(t_ends)
+        t_ends.shape.assert_has_rank(1)
+
+        with mg.post_batch_context():
+            t = self.batched_times
+            t_ends = tf.gather(t_ends, self.value_rowids)
+            if t_starts is not None:
+                t_starts = tf.gather(t_starts, self.value_rowids)
+                t = t - t_starts
+                t_ends = t_ends - t_starts
+
+            t = num_frames * t / t_ends
+            t = tf.cast(t, dtype)
+        return t
+
+    def batch_features(self, features):
+        mg.assert_is_model_tensor(features)
+        return ragged_layers.from_row_splits(features, self.model_row_splits)
+
+    def mean_features(self, features, batch_size):
+        mg.assert_is_model_tensor(features)
+        mg.assert_is_model_tensor(batch_size)
+        return tf.math.unsorted_segment_mean(features,
+                                             self.model_value_rowids,
+                                             num_segments=batch_size)
 
     @property
     def batched_times(self):
         self._batch()
         return self._batched_times
+
+    @property
+    def value_rowids(self):
+        self._batch()
+        return self._value_rowids
 
     @property
     def row_splits(self) -> IntTensor:
@@ -340,22 +446,35 @@ class Stream(object):
         features = mg.batch(features)
         with mg.post_batch_context():
             features = post_batch_ragged(features, validate=False)
-            if self._min_mean_size is not None:
+            # if self._min_mean_size is not None:
+            if self.padding is not None:
                 features = pad_ragged(features, self.padding)
         features = mg.model_input(features)
         return features
 
-    def prepare_labels(self, labels) -> Dict[str, tf.Tensor]:
+    def prepare_final_labels(self, labels) -> tf.Tensor:
         if mg.is_pre_cache(labels):
             labels = mg.cache(labels)
         else:
             mg.assert_is_pre_batch(labels)
         labels = mg.batch(labels)
+        return labels
+
+    def prepare_final_weights(self, weights):
+        if mg.is_pre_cache(weights):
+            weights = mg.cache(weights)
+        else:
+            mg.assert_is_pre_batch(weights)
+        return mg.batch(weights)
+
+    def prepare_labels(self, labels) -> Dict[str, tf.Tensor]:
+        labels = self.prepare_final_labels(labels)
         ret = {'final': labels}
         with mg.post_batch_context():
             row_lengths = self.row_lengths
             labels = tf_repeat(labels, row_lengths, axis=0)
-            if self._min_mean_size is not None:
+            # if self._min_mean_size is not None:
+            if self.padding is not None:
                 labels = tf.pad(labels, [[0, self.padding]])
             ret['stream'] = labels
         return ret
@@ -365,27 +484,56 @@ class Stream(object):
         if weights is None:
             weights = 1
         else:
-            if mg.is_pre_cache(weights):
-                weights = mg.cache(weights)
-            else:
-                mg.assert_is_pre_batch(weights)
-            weights = mg.batch(weights)
+            weights = self.prepare_final_weights(weights)
             ret['final'] = weights
 
         with mg.post_batch_context():
             row_lengths = self.row_lengths
-            weights = weights / (self._batch_size * row_lengths)
+            weights = weights / (self.batch_size * row_lengths)
             weights = tf_repeat(weights, row_lengths, axis=0)
-            if self._min_mean_size is not None:
-                weights = tf.pad(weights, [[0, self._padding]])
+            # if self._min_mean_size is not None:
+            if self.padding is not None:
+                weights = tf.pad(weights, [[0, self.padding]])
             ret['stream'] = weights
         return ret
+
+    def final_features(self, features):
+        mg.assert_is_model_tensor(features)
+        return Lambda(_final_features)(
+            [features, self.model_row_lengths, self.model_row_splits])
+
+    @property
+    def model_times(self):
+        if self._model_times is None:
+            self._model_times = mg.model_input(self.batched_times)
+        return self._model_times
+
+    @property
+    def model_row_lengths(self):
+        if self._model_row_lengths is None:
+            splits = self.model_row_splits
+            self._model_row_lengths = splits[1:] - splits[:-1]
+        return self._model_row_lengths
+
+    @property
+    def model_row_splits(self):
+        if self._model_row_splits is None:
+            self._model_row_splits = mg.model_input(self.row_splits)
+        return self._model_row_splits
 
     @property
     def model_row_ends(self):
         if self._model_row_ends is None:
-            self._model_row_ends = mg.model_input(self._row_ends)
+            # self._model_row_ends = mg.model_input(self._row_ends)
+            self._model_row_ends = self.model_row_splits[1:] - 1
         return self._model_row_ends
+
+    @property
+    def model_value_rowids(self):
+        if self._model_value_rowids is None:
+            self._model_value_rowids = tf.ragged.row_splits_to_segment_ids(
+                self.model_row_splits)
+        return self._model_value_rowids
 
     @classmethod
     def from_config(cls, config):
@@ -409,6 +557,23 @@ class Stream(object):
         with mg.pre_cache_context():
             return self._rebuild(times=tf.gather(self.times, indices))
 
+    def pool_features(self,
+                      t_end: IntTensor,
+                      features: FloatTensor,
+                      filters: int,
+                      temporal_kernel_size: int,
+                      num_decays=4,
+                      **kwargs):
+        mg.assert_is_model_tensor(t_end)
+        batch_size = tf.size(t_end)
+        value_rowids = self.model_value_rowids
+        t_end = tf.gather(t_end, value_rowids)
+        dt = (tf.cast(num_decays * (t_end - self.model_times), tf.float32) / tf.cast(t_end, tf.float32))
+        return conv_layers.TemporalEventPooling(
+            filters=filters,
+            temporal_kernel_size=temporal_kernel_size,
+            **kwargs)([features, dt, value_rowids, batch_size])
+
 
 class SpatialStream(Stream):
 
@@ -416,6 +581,7 @@ class SpatialStream(Stream):
                  grid: Union[Grid, IntTensor, IntArray, Tuple[int, ...]],
                  times: IntTensor,
                  coords: IntTensor,
+                 bucket_sizes: bool = False,
                  min_mean_size: Optional[int] = None,
                  dtype: tf.DType = DTYPE):
         assert (times.shape.ndims == 1)
@@ -436,7 +602,13 @@ class SpatialStream(Stream):
             raise ValueError('coords must be rank 1 or 2, got {}'.format(
                 coords.shape))
 
-        super().__init__(times=times, min_mean_size=min_mean_size, dtype=dtype)
+        self._batched_coords = None
+        self._model_coords = None
+
+        super().__init__(times=times,
+                         bucket_sizes=bucket_sizes,
+                         min_mean_size=min_mean_size,
+                         dtype=dtype)
 
     @classmethod
     def from_config(cls, config):
@@ -449,6 +621,73 @@ class SpatialStream(Stream):
     @property
     def coords(self) -> IntTensor:
         return self._coords
+
+    @property
+    def batched_coords(self):
+        if self._batched_coords is None:
+            coords = mg.cache(self._coords)
+            with mg.pre_batch_context():
+                coords = pre_batch_ragged(coords)
+            coords = mg.batch(coords)
+            self._batched_coords = coords.flat_values
+        return self._batched_coords
+
+    @property
+    def model_coords(self):
+        if self._model_coords is None:
+            self._model_coords = mg.model_input(self.batched_coords)
+        return self._model_coords
+
+    def pool_features(self,
+                      t_end: IntTensor,
+                      features: FloatTensor,
+                      filters: int,
+                      temporal_kernel_size: int,
+                      num_decays=4,
+                      **kwargs):
+        coords = self.model_coords
+        if self.grid.static_shape is not None:
+            coords = Lambda(
+                _normalize_coords,
+                arguments=dict(shape=self.grid.static_shape))(coords)
+        else:
+            raise NotImplementedError('TODO')
+        features = features + layers.Dense(features.shape[-1])(coords)
+        return super().pool_features(
+            t_end, features, filters, temporal_kernel_size, num_decays,
+            **kwargs)
+
+    def flash(self, features, t_start, t_end, num_frames: int, batch_size=None):
+        static_shape = self.grid.static_shape
+        assert (static_shape is not None)
+        static_size = np.prod(static_shape)
+        mg.assert_is_model_tensor(features)
+        assert (features.shape[-1] is not None)
+
+        with mg.post_batch_context():
+            batch_index = self.value_rowids
+            batched_coords = maybe_cast(self.batched_coords, batch_index.dtype)
+            time = self.frame_indices(t_start,
+                                      t_end,
+                                      num_frames,
+                                      dtype=batch_index.dtype)
+            dims = tf.stack((self.batch_size, num_frames, static_size), axis=0)
+            indices = tf.stack((batch_index, time, batched_coords), axis=0)
+            indices = grid_ops.ravel_multi_index(indices, dims, axis=0)
+
+        indices = mg.model_input(indices)
+        if batch_size is None:
+            assert (features.shape.ndims == 3)
+            batch_size = shape_layers.dimension(features, 0)
+            features = shape_layers.flatten_leading_dims(features)
+        features = tf.math.unsorted_segment_mean(
+            features,
+            indices,
+            num_segments=batch_size * (num_frames * np.prod(static_shape)))
+        features = Lambda(tf.reshape,
+                          arguments=dict(shape=(-1, num_frames, *static_shape,
+                                                features.shape[-1])))(features)
+        return features
 
     @property
     def shaped_coords(self):
@@ -686,11 +925,17 @@ class Convolver(Generic[S0, S1]):
 
         components = []
         with mg.pre_cache_context():
+            # tf.print(
+            #     tf.shape(self._splits)[0],
+            #     tf.shape(self._indices)[0], self._splits[-1])
             rowids = tf.ragged.row_splits_to_segment_ids(self._splits,
                                                          out_type=self.dtype)
             partitions = maybe_cast(self._partitions, tf.int32)
+
             ijs = tf.dynamic_partition(
-                tf_stack((rowids, self._indices), axis=-1), partitions,
+                tf_stack((rowids, self._indices),
+                         axis=-1,
+                         name='multi_partition_stack'), partitions,
                 num_partitions)
 
             # components = []
@@ -804,6 +1049,7 @@ def spike_threshold(stream: SpatialStream,
                     decay_time: int,
                     threshold: float = 1.,
                     reset_potential: float = -1.,
+                    bucket_sizes: bool = True,
                     min_mean_size: Optional[int] = None) -> SpatialStream:
     assert (stream.grid == link.in_grid)
     with mg.pre_cache_context():
@@ -818,6 +1064,7 @@ def spike_threshold(stream: SpatialStream,
     return SpatialStream(link.out_grid,
                          times,
                          coords,
+                         bucket_sizes=bucket_sizes,
                          min_mean_size=min_mean_size,
                          dtype=stream.dtype)
 
@@ -826,13 +1073,17 @@ def global_spike_threshold(stream: Stream,
                            decay_time: int,
                            threshold: float = 1.,
                            reset_potential: float = -1,
+                           bucket_sizes: bool = True,
                            min_mean_size: Optional[int] = None) -> Stream:
     with mg.pre_cache_context():
         time = spike_ops.global_spike_threshold(stream.times,
                                                 decay_time=decay_time,
                                                 threshold=threshold,
                                                 reset_potential=reset_potential)
-    return Stream(time, min_mean_size=min_mean_size, dtype=stream.dtype)
+    return Stream(time,
+                  min_mean_size=min_mean_size,
+                  dtype=stream.dtype,
+                  bucket_sizes=bucket_sizes)
 
 
 def spatio_temporal_convolver(grid_neighbors: GridNeighbors,
@@ -851,6 +1102,12 @@ def spatio_temporal_convolver(grid_neighbors: GridNeighbors,
             out_stream.coords, grid_neighbors.partitions,
             grid_neighbors.indices, grid_neighbors.splits, spatial_buffer_size,
             decay_time * max_decays)
+
+        # op = tf.assert_equal(tf.shape(indices)[0],
+        #                      splits[-1],
+        #                      message='spatio_temporal')
+        # with tf.control_dependencies([op]):
+        #     partitions = tf.identity(partitions)
     return Convolver(
         num_partitions=grid_neighbors.num_partitions,
         in_stream=in_stream,
@@ -909,6 +1166,11 @@ def flatten_convolver(in_stream: SpatialStream,
             out_times=out_stream.times,
             event_duration=decay_time * max_decays,
         )
+        # op = tf.assert_equal(tf.shape(indices)[0],
+        #                      splits[-1],
+        #                      message='flatten')
+        # with tf.control_dependencies([op]):
+        #     partitions = tf.identity(partitions)
     return Convolver[SpatialStream, Stream](num_partitions=num_partitions_,
                                             in_stream=in_stream,
                                             out_stream=out_stream,
@@ -922,8 +1184,8 @@ def temporal_convolver(in_stream: Stream,
                        out_stream: Stream,
                        decay_time: int,
                        max_decays: int = 4) -> Convolver[Stream, Stream]:
-    assert (not isinstance(in_stream, SpatialStream))
-    assert (not isinstance(out_stream, SpatialStream))
+    # assert (not isinstance(in_stream, SpatialStream))
+    # assert (not isinstance(out_stream, SpatialStream))
     with mg.pre_cache_context():
         indices, splits = neigh_ops.compute_pooled_neighbors(
             in_stream.times,

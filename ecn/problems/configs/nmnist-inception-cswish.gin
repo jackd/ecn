@@ -1,0 +1,8 @@
+import kblocks.extras.activations
+include 'nmnist-inception.gin'
+include 'misc/complex.gin'
+activation = @kb.extras.activations.modified_swish
+
+inception_multi_graph.filters0 = 16
+
+variant_id = 'complex-swish'

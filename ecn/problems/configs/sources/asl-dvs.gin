@@ -1,0 +1,8 @@
+import ecn.problems.sources
+base_source = @asl_dvs_source()
+batch_size = 32
+epochs = 100
+shuffle_buffer = 256
+validation_freq = 2
+
+problem_id = 'asl-dvs'

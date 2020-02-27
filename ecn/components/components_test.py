@@ -477,6 +477,13 @@ class ComponentsTest(tf.test.TestCase):
                                       dtype=dtype,
                                       feature_type=feature_type))
 
+    def test_to_nearest_power(self):
+        self.assertEqual(self.evaluate(comp.to_nearest_power(2)), 2)
+        self.assertEqual(self.evaluate(comp.to_nearest_power(3)), 4)
+        self.assertEqual(self.evaluate(comp.to_nearest_power(7)), 8)
+        self.assertEqual(self.evaluate(comp.to_nearest_power(8)), 8)
+        self.assertEqual(self.evaluate(comp.to_nearest_power(9)), 16)
+
 
 if __name__ == '__main__':
     tf.test.main()

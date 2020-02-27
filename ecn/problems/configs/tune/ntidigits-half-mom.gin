@@ -1,0 +1,3 @@
+include 'ntidigits-half.gin'
+
+ecn.tune.tune_multi_graph.optimizer = @tuned_sgd

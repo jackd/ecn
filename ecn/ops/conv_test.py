@@ -14,6 +14,26 @@ def random_dt(n_in, n_out, E):
 
 class ConvTest(tf.test.TestCase):
 
+    def test_complex_sparse_matmul(self):
+        n_in = 15
+        n_out = 13
+        E = 11
+        features = 7
+        i = tf.random.uniform((E,), maxval=n_out, dtype=tf.int64)
+        j = tf.random.uniform((E,), maxval=n_in, dtype=tf.int64)
+        values = tf.complex(tf.random.uniform((E,), dtype=tf.float32),
+                            tf.random.uniform((E,), dtype=tf.float32))
+        sparse = tf.SparseTensor(tf.stack((i, j), axis=-1), values,
+                                 [n_out, n_in])
+        dense = tf.complex(
+            tf.random.uniform((n_in, features), dtype=tf.float32),
+            tf.random.uniform((n_in, features), dtype=tf.float32),
+        )
+        actual = conv.sparse_dense_matmul(sparse, dense)
+        expected = tf.sparse.sparse_dense_matmul(sparse, dense)
+        actual, expected = self.evaluate((actual, expected))
+        np.testing.assert_allclose(actual, expected)
+
     def test_featureless_temporal_conv(self):
         n_in = 100
         n_out = 10
