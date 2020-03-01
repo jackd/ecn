@@ -1,0 +1,8 @@
+include 'ncaltech101.gin'
+include '../misc/aug.gin'
+cache_repeats = 2
+
+Augmented2DSource.base_source = @ncaltech101_source()
+Augmented2DSource.flip_lr = 0.5
+
+problem_id = 'ncaltech101-aug2'

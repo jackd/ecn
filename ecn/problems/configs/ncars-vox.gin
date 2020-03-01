@@ -1,0 +1,12 @@
+include 'base.gin'
+include 'builders/vox-pool.gin'
+include 'sources/ncars.gin'
+
+# compiler = @ecn.utils.compile_binary_classifier
+
+inception_vox_pooling.reset_potential = -0.5
+inception_vox_pooling.threshold = 1.1
+inception_vox_pooling.decay_time = 4000
+inception_vox_pooling.decay_time_expansion_rate = 1.4142135623730951  # sqrt(2)
+
+inception_vox_pooling.filters0 = 16

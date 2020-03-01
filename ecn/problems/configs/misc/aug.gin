@@ -7,16 +7,10 @@ Augmented2DSource.flip_time = 0.5
 kb.framework.cache_managers.train_impl = @kb.framework.RepeatCacheManager
 
 RepeatCacheManager.manager_impl = @TFRecordsCacheManager
-# TFRecordsCacheManager.num_shards = 16
 
 train/RepeatCacheManager.cache_dir = %train_cache_dir
 validation/BaseCacheManager.cache_dir = %validation_cache_dir
 
-RepeatCacheManager.num_repeats = 4
+RepeatCacheManager.num_repeats = %cache_repeats
+cache_repeats = 4
 BaseCacheManager.preprocess = True
-
-# TfdsSource.shuffle_files = False
-# TfdsSource.read_config = @tfds.ReadConfig()
-
-# tfds.ReadConfig.interleave_parallel_reads = 1
-# tfds.ReadConfig.interleave_block_length = 1

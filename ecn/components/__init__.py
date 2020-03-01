@@ -82,10 +82,10 @@ def tf_stack(values, axis=0, name=None):
     return tf.stack(values, axis=axis, name=name)
 
 
-def pad_ragged(rt, padding):
+def pad_ragged(rt, padding, values=0):
     flat_values = rt.values
 
-    flat_values = tf.pad(rt.flat_values, [[0, padding]])
+    flat_values = tf.pad(rt.flat_values, [[0, padding]], constant_values=values)
     starts, total = tf.split(rt.row_splits, [1, -1])
     row_splits = tf.concat((starts, total + padding), axis=0)
     return tf.RaggedTensor.from_row_splits(flat_values,
@@ -260,12 +260,14 @@ class Stream(object):
         self._min_mean_size = min_mean_size
         self._batched = False
         self._size = None
+        self._model_row_starts = None
         self._model_row_ends = None
         self._model_row_splits = None
         self._model_value_rowids = None
         self._model_row_lengths = None
         self._model_times = None
         self._model_batch_size = None
+        self._model_valid_size = None
 
         self._bucket_sizes = bucket_sizes
 
@@ -311,6 +313,16 @@ class Stream(object):
         times = mg.batch(times)
         with mg.post_batch_context():
             times = post_batch_ragged(times, validate=False)
+            self._valid_size = times.row_splits[-1]
+            if self._bucket_sizes:
+                self._batched_size = to_nearest_power(self._valid_size, 2)
+                self._padding = self._batched_size - self._valid_size
+                times = pad_ragged(
+                    times, self._padding, values=times.dtype.limits[1])
+            else:
+                self._batched_size = self._valid_size
+                self._padding = None
+
             self._batched_times = times.flat_values
             self._value_rowids = times.value_rowids()
             self._row_splits = times.row_splits
@@ -326,24 +338,6 @@ class Stream(object):
             self._row_ends = row_ends - 1  # used in model gather
 
             self._batch_size = tf.size(self._row_lengths, out_type=tf.int64)
-
-            if self._bucket_sizes:
-                self._batched_size = to_nearest_power(self._valid_size, 2)
-                self._padding = self._batched_size - self._valid_size
-            else:
-                self._batched_size = self._valid_size
-                self._padding = None
-
-            # if self._min_mean_size is None:
-            #     self._batched_size = self._valid_size
-            #     self._padding = None
-            # else:
-            #     self._batched_size = to_nearest_power(self._valid_size, 2)
-            #     # min_size = self._batch_size * self.min_mean_size
-            #     # factor = (tf.cast(valid_size, tf.float32) /
-            #     #           tf.cast(min_size, tf.float32))
-            #     # self._batched_size = tf.maximum(min_size, self._valid_size)
-            #     self._padding = self._batched_size - self._valid_size
 
         self._batched = True
 
@@ -436,6 +430,15 @@ class Stream(object):
     def valid_size(self) -> IntTensor:
         return self._valid_size
 
+    @property
+    def model_valid_size(self) -> IntTensor:
+        if self._model_valid_size is not None:
+            with mg.post_batch_context():
+                valid_size = tf.expand_dims(self.valid_size, axis=0)
+            valid_size = mg.model_input(valid_size)
+            self._model_valid_size = tf.squeeze(valid_size)
+        return self._model_valid_size
+
     def prepare_model_inputs(self, features) -> tf.RaggedTensor:
         if mg.is_pre_cache(features):
             features = mg.cache(features)
@@ -516,6 +519,12 @@ class Stream(object):
         return self._model_row_lengths
 
     @property
+    def model_row_starts(self):
+        if self._model_row_starts is None:
+            self._model_row_starts = self.model_row_splits[:-1]
+        return self._model_row_starts
+
+    @property
     def model_row_splits(self):
         if self._model_row_splits is None:
             self._model_row_splits = mg.model_input(self.row_splits)
@@ -568,7 +577,8 @@ class Stream(object):
         batch_size = tf.size(t_end)
         value_rowids = self.model_value_rowids
         t_end = tf.gather(t_end, value_rowids)
-        dt = (tf.cast(num_decays * (t_end - self.model_times), tf.float32) / tf.cast(t_end, tf.float32))
+        dt = (tf.cast(num_decays * (t_end - self.model_times), tf.float32) /
+              tf.cast(t_end, tf.float32))
         return conv_layers.TemporalEventPooling(
             filters=filters,
             temporal_kernel_size=temporal_kernel_size,
@@ -629,7 +639,12 @@ class SpatialStream(Stream):
             with mg.pre_batch_context():
                 coords = pre_batch_ragged(coords)
             coords = mg.batch(coords)
-            self._batched_coords = coords.flat_values
+            with mg.post_batch_context():
+                self._batched_coords = coords.flat_values
+                padding = self.padding
+                if padding is not None:
+                    self._batched_coords = tf.pad(
+                        self._batched_coords, [[0, padding]])
         return self._batched_coords
 
     @property
@@ -653,11 +668,16 @@ class SpatialStream(Stream):
         else:
             raise NotImplementedError('TODO')
         features = features + layers.Dense(features.shape[-1])(coords)
-        return super().pool_features(
-            t_end, features, filters, temporal_kernel_size, num_decays,
-            **kwargs)
+        return super().pool_features(t_end, features, filters,
+                                     temporal_kernel_size, num_decays, **kwargs)
 
-    def flash(self, features, t_start, t_end, num_frames: int, batch_size=None):
+    def voxelize(self,
+                 reduction,
+                 features,
+                 t_start,
+                 t_end,
+                 num_frames: int,
+                 batch_size=None):
         static_shape = self.grid.static_shape
         assert (static_shape is not None)
         static_size = np.prod(static_shape)
@@ -677,17 +697,45 @@ class SpatialStream(Stream):
 
         indices = mg.model_input(indices)
         if batch_size is None:
-            assert (features.shape.ndims == 3)
+            features.shape.assert_has_rank(3)
             batch_size = shape_layers.dimension(features, 0)
             features = shape_layers.flatten_leading_dims(features)
-        features = tf.math.unsorted_segment_mean(
-            features,
-            indices,
-            num_segments=batch_size * (num_frames * np.prod(static_shape)))
+        features.shape.assert_has_rank(2)
+        if self.padding is not None:
+            valid_size = self.model_valid_size
+            features = features[:valid_size]
+            indices = indices[:valid_size]
+        features = reduction(features,
+                             indices,
+                             num_segments=batch_size *
+                             (num_frames * np.prod(static_shape)))
         features = Lambda(tf.reshape,
                           arguments=dict(shape=(-1, num_frames, *static_shape,
                                                 features.shape[-1])))(features)
+        # HACK
+        # features = tf.reduce_mean(features, axis=0)
+        # features = tf.reshape(features, (1, 1, 1, 1, -1))
+        # features = tf.tile(features, (batch_size, num_frames, *static_shape, 1))
+
         return features
+
+    def mean_voxelize(self,
+                      features,
+                      t_start,
+                      t_end,
+                      num_frames: int,
+                      batch_size=None):
+        return self.voxelize(tf.math.unsorted_segment_mean, features, t_start,
+                             t_end, num_frames, batch_size)
+
+    def max_voxelize(self,
+                     features,
+                     t_start,
+                     t_end,
+                     num_frames: int,
+                     batch_size=None):
+        return self.voxelize(tf.math.unsorted_segment_max, features, t_start,
+                             t_end, num_frames, batch_size)
 
     @property
     def shaped_coords(self):

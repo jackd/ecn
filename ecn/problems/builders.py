@@ -8,6 +8,16 @@ from ecn import multi_graph as mg
 
 Lambda = tf.keras.layers.Lambda
 
+class Printer(tf.keras.layers.Layer):
+    def __init__(self, fn, **kwargs):
+        self._fn = fn
+        super().__init__(**kwargs)
+
+    def call(self, inputs):
+        with tf.control_dependencies([tf.print(self._fn(inputs))]):
+            return tf.nest.map_structure(tf.identity, inputs)
+
+
 
 def _complex(args):
     return tf.complex(*args)
@@ -1123,30 +1133,42 @@ def inception_multi_graph_v2(
 
 
 @gin.configurable(module='ecn.builders')
-def inception_flash_multi_graph(
+def inception_vox_pooling(
         features,
         labels,
         weights=None,
-        num_classes=101,
-        grid_shape=(234, 174),
+        num_classes=10,
+        grid_shape=(128, 128),
         decay_time=2000,
         spatial_buffer=32,
-        reset_potential=-2.0,
-        threshold=1.0,
+        reset_potential=-3.0,
+        threshold=1.5,
         filters0: int = 8,
         kt0: int = 4,
         hidden_units: Sequence[int] = (256,),
         dropout_rate: float = 0.5,
-        decay_time_expansion_rate: float = np.sqrt(2),
+        decay_time_expansion_rate: float = 2.0,
         num_levels: int=5,
         activation='relu',
         bucket_sizes: bool=False,
-        recenter: bool=True
+        recenter: bool=True,
+        vox_reduction: str = 'mean',
+        vox_start = 2,
+        initial_pooling = None,
 ):
+    if vox_reduction == 'max':
+        reduction = tf.math.unsorted_segment_max
+    else:
+        assert(vox_reduction == 'mean')
+        reduction = tf.math.unsorted_segment_mean
     times = features['time']
     coords = features['coords']
     polarity = features['polarity']
     with mg.pre_cache_context():
+        if initial_pooling is not None:
+            if grid_shape is not None:
+                grid_shape = tuple(g // initial_pooling for g in grid_shape)
+            coords = coords // initial_pooling
         if recenter:
             max_coords = tf.reduce_max(coords, axis=0)
             offset = (tf.constant(grid_shape, dtype=coords.dtype) - max_coords) // 2
@@ -1163,7 +1185,7 @@ def inception_flash_multi_graph(
     # link = grid.link((5, 5), (2, 2), (2, 2))
     link = grid.link((3, 3), (2, 2), (1, 1))
 
-    in_stream = comp.SpatialStream(grid,
+    in_stream: comp.SpatialStream = comp.SpatialStream(grid,
                                    times,
                                    coords,
                                    bucket_sizes=bucket_sizes)
@@ -1181,7 +1203,7 @@ def inception_flash_multi_graph(
 
     batch_size, features = tf.keras.layers.Lambda(
         lambda x: (x.nrows(), tf.identity(x.values)))(features)
-    num_frames = 2**num_levels
+    num_frames = 2**(num_levels - 1)
 
     convolver = comp.spatio_temporal_convolver(
         link,
@@ -1196,9 +1218,6 @@ def inception_flash_multi_graph(
     features = layers.BatchNormalization()(features)
     features = layers.Dropout(dropout_rate)(features)
 
-    image_features = out_stream.flash(
-        features, t_start, t_end, num_frames, batch_size)
-
     in_stream = out_stream
     del out_stream
     del convolver
@@ -1208,8 +1227,8 @@ def inception_flash_multi_graph(
     t_kernel[2] = True
     t_kernel[:, 2] = True
 
-    for _ in range(num_levels):
-        # in place
+
+    def do_in_place(in_stream: comp.SpatialStream, features, filters):
         link = in_stream.grid.partial_self_link(t_kernel)
         t_convolver = comp.spatio_temporal_convolver(
             link,
@@ -1238,6 +1257,35 @@ def inception_flash_multi_graph(
 
         branched = layers.BatchNormalization()(branched)
         features = features + branched
+        return features
+
+    def merge_voxel_features(
+            in_stream: comp.SpatialStream, features, voxel_features,
+            num_frames):
+        out_voxel_features = in_stream.voxelize(
+            reduction, features, t_start, t_end, num_frames, batch_size)
+        out_voxel_features = layers.BatchNormalization()(out_voxel_features)
+        if voxel_features is None:
+            return out_voxel_features
+        else:
+            voxel_features = layers.Conv3D(
+                features.shape[-1], 2, 2, activation=activation,
+                padding='same')(voxel_features)
+            voxel_features = layers.BatchNormalization()(voxel_features)
+            voxel_features = voxel_features + out_voxel_features
+        return voxel_features
+
+
+    voxel_features = None
+
+    for i in range(num_levels-1):
+        # in place
+        features = do_in_place(in_stream, features, filters)
+        if i >= vox_start:
+            voxel_features = merge_voxel_features(
+                in_stream, features, voxel_features, num_frames)
+        num_frames //= 2
+        filters *= 2
 
         link = in_stream.grid.link((3, 3), (2, 2), (1, 1))
         out_stream = comp.spike_threshold(in_stream,
@@ -1246,7 +1294,6 @@ def inception_flash_multi_graph(
                                           bucket_sizes=bucket_sizes,
                                           **spike_kwargs)
 
-        filters *= 2
         ds_convolver = comp.spatio_temporal_convolver(
             link,
             in_stream,
@@ -1260,79 +1307,33 @@ def inception_flash_multi_graph(
                                          activation=activation)
         features = layers.BatchNormalization()(features)
         features = layers.Dropout(dropout_rate)(features)
-
-        num_frames //= 2
-        in_image_features = layers.Conv3D(
-            filters, 2, 2, padding='same',
-            activation=activation)(image_features)
-        in_image_features = layers.BatchNormalization()(in_image_features)
-        out_image_features = out_stream.flash(
-            features, t_start, t_end, num_frames, batch_size)
-        image_features = Lambda(tf.concat, arguments=dict(axis=-1))(
-            [in_image_features, out_image_features])
-        image_features = layers.Dense(
-            filters, activation=activation)(image_features)
-        image_features = layers.BatchNormalization()(image_features)
         in_stream = out_stream
         del out_stream
         decay_time = int(decay_time * decay_time_expansion_rate)
 
+    features = do_in_place(in_stream, features, filters)
+    voxel_features = merge_voxel_features(
+        in_stream, features, voxel_features, num_frames)
     assert (num_frames == 1)
-    assert (image_features.shape[1] == 1)
-
-    global_stream = comp.global_spike_threshold(in_stream,
-                                                decay_time=decay_time,
-                                                bucket_sizes=bucket_sizes,
-                                                **spike_kwargs)
-    flat_convolver = comp.flatten_convolver(in_stream, global_stream,
-                                            decay_time)
-    features = flat_convolver.convolve(features,
-                                       filters=filters,
-                                       temporal_kernel_size=kt0,
-                                       activation=activation)
+    assert (voxel_features.shape[1] == 1)
+    image_features = Lambda(tf.squeeze, arguments=dict(axis=1))(voxel_features)
+    image_features = layers.Dense(2*filters)(image_features)
+    features = tf.keras.layers.GlobalMaxPooling2D()(image_features)
     features = layers.BatchNormalization()(features)
     features = layers.Dropout(dropout_rate)(features)
-    filters *= 2
-    temporal_convolver = comp.temporal_convolver(global_stream, global_stream,
-                                                 decay_time * 4)
-    features = temporal_convolver.convolve(features,
-                                           filters=filters,
-                                           temporal_kernel_size=kt0 * 2,
-                                           activation=activation)
-    features = layers.BatchNormalization()(features)
-    features = layers.Dropout(dropout_rate)(features)
-    # features = global_stream.mean_features(features, batch_size)
-    image_features = layers.Dense(
-        filters, activation=activation)(image_features)
-    image_features = layers.BatchNormalization()(image_features)
-    # image_features = tf.keras.layers.MaxPooling3D()(image_features)
-    image_features = Lambda(tf.reduce_max, arguments=dict(axis=(1, 2, 3)))(
-        image_features)
-
-    features = global_stream.final_features(features)
-
-    features = Lambda(tf.concat, arguments=dict(axis=-1))(
-        [features, image_features])
 
     for h in hidden_units:
         features = layers.Dense(h, activation=activation)(features)
         features = layers.BatchNormalization()(features)
         features = layers.Dropout(dropout_rate)(features)
-    logits = layers.Dense(num_classes, activation=None, name='stream')(features)
-    final_logits = tf.keras.layers.Lambda(
-        lambda args: tf.gather(*args),
-        name='final')([logits, global_stream.model_row_ends])
+    logits = layers.Dense(num_classes, activation=None, name='logits')(features)
 
-    outputs = (final_logits, logits)
-
-    labels = global_stream.prepare_final_labels(labels)
+    labels = mg.batch(mg.cache(labels))
     if weights is None:
-        return (outputs, labels)
-
-    weights = global_stream.prepare_weights(weights)
-    return (outputs, labels, weights)
-
-
+        return logits, labels
+    else:
+        weights = mg.batch(mg.cache(weights))
+        return logits, labels, weights
 
 
 @gin.configurable(module='ecn.builders')
@@ -1356,7 +1357,7 @@ def inception_pooling(
         num_levels: int=3,
         activation='relu',
         bucket_sizes: bool=False,
-        recenter: bool=True
+        recenter: bool=True,
 ):
     times = features['time']
     coords = features['coords']

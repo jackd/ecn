@@ -30,11 +30,11 @@ def build_fn(features, labels, weights=None):
     polarity = Lambda(lambda x: tf.one_hot(tf.cast(x.values, tf.uint8), 2))(
         polarity)
 
-    out = stream.flash(polarity,
-                       t_start,
-                       t_end,
-                       num_frames,
-                       batch_size=batch_size)
+    out = stream.mean_voxelize(polarity,
+                               t_start,
+                               t_end,
+                               num_frames,
+                               batch_size=batch_size)
     return out, (), ()
 
 

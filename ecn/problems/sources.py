@@ -5,21 +5,20 @@ from kblocks.framework.sources import TfdsSource
 
 @gin.configurable(module='ecn.sources')
 def ncars_source(**kwargs):
-    from events_tfds.events.ncars import Ncars
-    return TfdsSource(Ncars(),
+    from events_tfds.events import ncars
+    return TfdsSource(ncars.Ncars(),
                       split_map={'validation': 'test'},
-                      meta={},
+                      meta=dict(grid_shape=ncars.GRID_SHAPE, num_classes=2),
                       **kwargs)
 
 
 @gin.configurable(module='ecn.sources')
 def nmnist_source(**kwargs):
-    from events_tfds.events.nmnist import NMNIST
-    from events_tfds.events.nmnist import NUM_CLASSES
-    from events_tfds.events.nmnist import GRID_SHAPE
-    return TfdsSource(NMNIST(),
+    from events_tfds.events import nmnist
+    return TfdsSource(nmnist.NMNIST(),
                       split_map={'validation': 'test'},
-                      meta=dict(num_classes=NUM_CLASSES, grid_shape=GRID_SHAPE),
+                      meta=dict(num_classes=nmnist.NUM_CLASSES,
+                                grid_shape=nmnist.GRID_SHAPE),
                       **kwargs)
 
 
@@ -32,6 +31,8 @@ def mnist_dvs_source(scale=16, train_percent=90, **kwargs):
         16: mnist_dvs.SCALE16,
     }[scale]
     builder = mnist_dvs.MnistDVS(config=config)
+    if kwargs.get('download_and_prepare', True):
+        builder.download_and_prepare()
     examples_per_epoch = builder.info.splits['train'].num_examples
 
     return TfdsSource(
@@ -51,10 +52,10 @@ def mnist_dvs_source(scale=16, train_percent=90, **kwargs):
 
 @gin.configurable(module='ecn.sources')
 def ncaltech101_source(train_percent=90, **kwargs):
-    from events_tfds.events.ncaltech101 import Ncaltech101
-    from events_tfds.events.ncaltech101 import NUM_CLASSES
-    from events_tfds.events.ncaltech101 import GRID_SHAPE
-    builder = Ncaltech101()
+    from events_tfds.events import ncaltech101
+    builder = ncaltech101.Ncaltech101()
+    if kwargs.get('download_and_prepare', True):
+        builder.download_and_prepare()
     examples_per_epoch = builder.info.splits['train'].num_examples
 
     return TfdsSource(
@@ -67,16 +68,17 @@ def ncaltech101_source(train_percent=90, **kwargs):
             'train': int(examples_per_epoch * train_percent / 100),
             'validation': int(examples_per_epoch * (1 - train_percent / 100))
         },
-        meta=dict(num_classes=NUM_CLASSES, grid_shape=GRID_SHAPE),
+        meta=dict(num_classes=ncaltech101.NUM_CLASSES,
+                  grid_shape=ncaltech101.GRID_SHAPE),
         **kwargs)
 
 
 @gin.configurable(module='ecn.sources')
 def cifar10_dvs_source(train_percent=90, **kwargs):
-    from events_tfds.events.cifar10_dvs import Cifar10DVS
-    from events_tfds.events.cifar10_dvs import NUM_CLASSES
-    from events_tfds.events.cifar10_dvs import GRID_SHAPE
-    builder = Cifar10DVS()
+    from events_tfds.events import cifar10_dvs
+    builder = cifar10_dvs.Cifar10DVS()
+    if kwargs.get('download_and_prepare', True):
+        builder.download_and_prepare()
     examples_per_epoch = builder.info.splits['train'].num_examples
 
     return TfdsSource(
@@ -89,16 +91,17 @@ def cifar10_dvs_source(train_percent=90, **kwargs):
             'train': int(examples_per_epoch * train_percent / 100),
             'validation': int(examples_per_epoch * (1 - train_percent / 100))
         },
-        meta=dict(num_classes=NUM_CLASSES, grid_shape=GRID_SHAPE),
+        meta=dict(num_classes=cifar10_dvs.NUM_CLASSES,
+                  grid_shape=cifar10_dvs.GRID_SHAPE),
         **kwargs)
 
 
 @gin.configurable(module='ecn.sources')
 def asl_dvs_source(train_percent=80, **kwargs):
-    from events_tfds.events.asl_dvs import AslDvs
-    from events_tfds.events.asl_dvs import NUM_CLASSES
-    from events_tfds.events.asl_dvs import GRID_SHAPE
-    builder = AslDvs()
+    from events_tfds.events import asl_dvs
+    builder = asl_dvs.AslDvs()
+    if kwargs.get('download_and_prepare', True):
+        builder.download_and_prepare()
     examples_per_epoch = builder.info.splits['train'].num_examples
 
     return TfdsSource(
@@ -111,21 +114,20 @@ def asl_dvs_source(train_percent=80, **kwargs):
             'train': int(examples_per_epoch * train_percent / 100),
             'validation': int(examples_per_epoch * (1 - train_percent / 100))
         },
-        meta=dict(num_classes=NUM_CLASSES, grid_shape=GRID_SHAPE),
+        meta=dict(num_classes=asl_dvs.NUM_CLASSES,
+                  grid_shape=asl_dvs.GRID_SHAPE),
         **kwargs)
 
 
 @gin.configurable(module='ecn.sources')
 def ntidigits_source():
-    from events_tfds.events.ntidigits import Ntidigits
-    from events_tfds.events.ntidigits import NUM_CLASSES
-    from events_tfds.events.ntidigits import NUM_CHANNELS
-    builder = Ntidigits()
+    from events_tfds.events import ntidigits
+    builder = ntidigits.Ntidigits()
 
     return TfdsSource(builder,
                       split_map={'validation': 'test'},
-                      meta=dict(num_classes=NUM_CLASSES,
-                                grid_shape=(NUM_CHANNELS,)))
+                      meta=dict(num_classes=ntidigits.NUM_CLASSES,
+                                grid_shape=(ntidigits.NUM_CHANNELS,)))
 
 
 @gin.configurable(module='ecn.sources')

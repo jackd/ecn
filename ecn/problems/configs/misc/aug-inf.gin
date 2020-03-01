@@ -1,0 +1,4 @@
+base_source = @Augmented2DSource()
+Augmented2DSource.flip_time = 0.5
+
+BasePipeline.cache_managers = None

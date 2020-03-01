@@ -1,0 +1,7 @@
+include 'mnist-dvs.gin'
+include '../misc/aug.gin'
+cache_repeats = 8
+
+Augmented2DSource.base_source = @mnist_dvs_source()
+
+problem_id = 'mnist-dvs-aug8'

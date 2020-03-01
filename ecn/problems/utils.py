@@ -59,10 +59,13 @@ def compile_classifier(model: tf.keras.Model, optimizer=None):
 
 
 @gin.configurable(module='ecn.utils')
-def compile_binary_classifier(model: tf.keras.Model, optimizer=None):
+def compile_binary_classifier(model: tf.keras.Model,
+                              optimizer=None,
+                              label_smoothing=0.05):
     if optimizer is None:
         optimizer = optimizers.Adam()
-    model.compile(loss=losses.BinaryCrossentropy(from_logits=True),
+    model.compile(loss=losses.BinaryCrossentropy(
+        from_logits=True, label_smoothing=label_smoothing),
                   metrics=[metrics.BinaryAccuracy(name='acc')],
                   optimizer=optimizer)
 
@@ -106,11 +109,13 @@ def multi_graph_trainable(build_fn: Callable,
                           batch_size: int,
                           compiler=compile_stream_classifier,
                           model_dir: Optional[str] = None,
+                          rebuild_model_with_xla: bool = False,
                           **pipeline_kwargs):
     logging.info('Building multi graph...')
     built = mg.build_multi_graph(
         functools.partial(build_fn, **base_source.meta),
         base_source.example_spec, batch_size)
+
     logging.info('Successfully built!')
 
     pipeline = BasePipeline(batch_size,
@@ -120,6 +125,10 @@ def multi_graph_trainable(build_fn: Callable,
                             **pipeline_kwargs)
     source = PipelinedSource(base_source, pipeline)
     model = built.trained_model
+    if rebuild_model_with_xla:
+        with tf.xla.experimental.jit_scope():
+            model = tf.keras.models.clone_model(model)
+
     if compiler is not None:
         compiler(model)
     return Trainable(source, model, model_dir)
@@ -282,6 +291,8 @@ def vis_streams1d(build_fn, base_source: DataSource):
 def _vis_single_adjacency(indices, splits, in_times, out_times, decay_time, ax0,
                           ax1):
     from scipy.sparse import coo_matrix
+    if indices.size == 0:
+        return
     print(f'{in_times.size} -> {out_times.size} events')
     print(f'{indices.size} edges')
     row_lengths = splits[1:] - splits[:-1]
@@ -398,8 +409,31 @@ if __name__ == '__main__':
     # build_fn = functools.partial(builders.inception_pooling, threshold=1.1)
     # source = sources.asl_dvs_source()
 
-    build_fn = functools.partial(builders.inception_pooling, num_levels=4)
-    source = sources.ncaltech101_source()
+    # build_fn = functools.partial(builders.inception_pooling, num_levels=4)
+
+    build_fn = functools.partial(
+        builders.inception_vox_pooling,
+        reset_potential=-3,
+        threshold=1.0,
+        decay_time=1000,
+        # decay_time_expansion_rate=np.sqrt(2),
+        # num_levels=6,
+        initial_pooling=2
+
+        # decay_time_expansion_rate=2
+        #     #  num_levels=3,
+        #     #  vox_start=0,
+    )
+    # source = sources.nmnist_source()
+    # source = sources.mnist_dvs_source()
+    # source = sources.cifar10_dvs_source()
+
+    # build_fn = builders.inception_vox_pooling
+    # source = sources.cifar10_dvs_source()
+
+    source = sources.asl_dvs_source()
+    # source = sources.ncars_source()
+    # source = sources.ncaltech101_source()
     # build_fn = functools.partial(
     # builders.inception_multi_graph_v2,
     # builders.inception_flash_multi_graph,
@@ -414,8 +448,8 @@ if __name__ == '__main__':
     # print('built successfully')
 
     # vis_streams1d(build_fn, source)
-    # vis_streams(build_fn, source)
-    vis_streams(build_fn, source, group_size=group_size, skip_vis=True)
+    vis_streams(build_fn, source)
+    # vis_streams(build_fn, source, group_size=group_size, skip_vis=True)
     # vis_adjacency(build_fn, source)
     #     from ecn.problems.nmnist import simple_multi_graph
     #     from ecn.problems.nmnist import nmnist_source

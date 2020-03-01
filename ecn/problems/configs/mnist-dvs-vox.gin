@@ -1,0 +1,7 @@
+include 'base.gin'
+include 'builders/vox-pool.gin'
+include 'sources/mnist-dvs.gin'
+
+inception_vox_pooling.reset_potential = -2
+inception_vox_pooling.threshold = 1.5
+inception_vox_pooling.decay_time = 10000

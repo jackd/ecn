@@ -6,6 +6,9 @@ BoolTensor = tf.Tensor
 IntTensor = tf.Tensor
 FloatTensor = tf.Tensor
 
+# # EXPERIMENTAL_COMPILE = True
+# EXPERIMENTAL_COMPILE = False
+
 
 def as_complex_tensor(x: tf.Tensor):
     return x if x.dtype.is_complex else tf.complex(x, tf.zeros_like(x))
@@ -62,6 +65,7 @@ def sparse_dense_matmul(sp_a: tf.SparseTensor, b: tf.Tensor):
         return tf.sparse.sparse_dense_matmul(sp_a, b)
 
 
+# @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def featureless_temporal_event_conv(dt: tf.SparseTensor, kernel: FloatTensor,
                                     decay: FloatTensor) -> FloatTensor:
     """
@@ -83,7 +87,7 @@ def featureless_temporal_event_conv(dt: tf.SparseTensor, kernel: FloatTensor,
         [n_out, f_out] output features.
     """
     # arg checking
-    tf.debugging.assert_non_negative(dt.values)
+    # tf.debugging.assert_non_negative(dt.values)
     if decay.dtype.is_complex:
         assert (kernel.dtype.is_complex)
         dt = as_complex(dt)
@@ -96,8 +100,8 @@ def featureless_temporal_event_conv(dt: tf.SparseTensor, kernel: FloatTensor,
 
     assert (isinstance(dt, tf.SparseTensor))
     dt.shape.assert_has_rank(2)
-    tf.debugging.assert_non_negative(
-        tf.math.real(decay) if decay.dtype.is_complex else decay)
+    # tf.debugging.assert_non_negative(
+    #     tf.math.real(decay) if decay.dtype.is_complex else decay)
     values = tf.exp(-tf.expand_dims(decay, axis=0) *
                     tf.expand_dims(dt.values, axis=-1))  # [E, kt]
     i, j = tf.unstack(dt.indices, axis=-1)
@@ -107,6 +111,7 @@ def featureless_temporal_event_conv(dt: tf.SparseTensor, kernel: FloatTensor,
     return tf.matmul(row_sum, kernel)
 
 
+# @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def binary_temporal_event_conv(features: BoolTensor,
                                dt: tf.SparseTensor,
                                kernel: FloatTensor,
@@ -133,7 +138,7 @@ def binary_temporal_event_conv(features: BoolTensor,
         [n_out, f_out] output features.
     """
     # arg checking
-    tf.debugging.assert_non_negative(dt.values)
+    # tf.debugging.assert_non_negative(dt.values)
     if decay.dtype.is_complex:
         assert (kernel.dtype.is_complex)
         dt = as_complex(dt)
@@ -153,8 +158,8 @@ def binary_temporal_event_conv(features: BoolTensor,
 
     assert (isinstance(dt, tf.SparseTensor))
     dt.shape.assert_has_rank(2)
-    tf.debugging.assert_non_negative(
-        tf.math.real(decay) if decay.dtype.is_complex else decay)
+    # tf.debugging.assert_non_negative(
+    #     tf.math.real(decay) if decay.dtype.is_complex else decay)
     values = tf.exp(-tf.expand_dims(decay, axis=0) *
                     tf.expand_dims(dt.values, axis=-1))  # [E, kt]
     i, j = tf.unstack(dt.indices, axis=-1)
@@ -169,6 +174,7 @@ def binary_temporal_event_conv(features: BoolTensor,
     return tf.matmul(row_sum, kernel)
 
 
+# @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def temporal_event_pooling(features: FloatTensor, dt: FloatTensor,
                            value_rowids: IntTensor, batch_size: IntTensor,
                            kernel: FloatTensor, decay: FloatTensor):
@@ -207,6 +213,7 @@ def temporal_event_pooling(features: FloatTensor, dt: FloatTensor,
     return tf.matmul(left, kernel)
 
 
+# @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def temporal_event_conv(features: FloatTensor,
                         dt: tf.SparseTensor,
                         kernel: FloatTensor,
@@ -234,7 +241,7 @@ def temporal_event_conv(features: FloatTensor,
         [n_out, f_out] output features.
     """
     # arg checking
-    tf.debugging.assert_non_negative(dt.values)
+    # tf.debugging.assert_non_negative(dt.values)
     if decay.dtype.is_complex:
         assert (kernel.dtype.is_complex)
         dt = as_complex(dt)
@@ -261,8 +268,8 @@ def temporal_event_conv(features: FloatTensor,
     sparse_values = dt.values
     sparse_indices = dt.indices
     dense_shape = dt.dense_shape
-    tf.debugging.assert_non_negative(
-        tf.math.real(decay) if decay.dtype.is_complex else decay)
+    # tf.debugging.assert_non_negative(
+    #     tf.math.real(decay) if decay.dtype.is_complex else decay)
     sparse_values = tf.exp(-tf.expand_dims(decay, axis=-1) * sparse_values)
 
     def map_fn(kernel, sparse_values):
@@ -277,6 +284,7 @@ def temporal_event_conv(features: FloatTensor,
     return features
 
 
+# @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def featureless_spatio_temporal_event_conv(
         dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]],
         kernel: FloatTensor, decay: FloatTensor) -> FloatTensor:
@@ -322,6 +330,7 @@ def featureless_spatio_temporal_event_conv(
     return tf.add_n(terms)
 
 
+# @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def binary_spatio_temporal_event_conv(
         features: BoolTensor,
         dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]],
@@ -373,6 +382,7 @@ def binary_spatio_temporal_event_conv(
     return tf.add_n(terms)
 
 
+# @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def spatio_temporal_event_conv(
         features: FloatTensor,
         dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]],

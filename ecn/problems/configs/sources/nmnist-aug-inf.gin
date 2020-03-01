@@ -1,0 +1,9 @@
+import kblocks.framework.pipelines
+import ecn.problems.augment
+import ecn.problems.sources
+include 'nmnist.gin'
+include '../misc/aug-inf.gin'
+
+Augmented2DSource.base_source = @nmnist_source()
+
+problem_id = 'nmnist-aug-inf'
