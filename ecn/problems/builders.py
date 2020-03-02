@@ -1155,6 +1155,7 @@ def inception_vox_pooling(
         vox_reduction: str = 'mean',
         vox_start = 2,
         initial_pooling = None,
+        max_events = None
 ):
     if vox_reduction == 'max':
         reduction = tf.math.unsorted_segment_max
@@ -1165,6 +1166,10 @@ def inception_vox_pooling(
     coords = features['coords']
     polarity = features['polarity']
     with mg.pre_cache_context():
+        if max_events is not None:
+            times = times[:max_events]
+            coords = coords[:max_events]
+            polarity = polarity[:max_events]
         if initial_pooling is not None:
             if grid_shape is not None:
                 grid_shape = tuple(g // initial_pooling for g in grid_shape)

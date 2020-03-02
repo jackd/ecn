@@ -6,6 +6,7 @@ inception_vox_pooling.reset_potential = -3.0
 inception_vox_pooling.threshold = 1.0
 inception_vox_pooling.decay_time = 1000
 inception_vox_pooling.initial_pooling = 2
+inception_vox_pooling.max_events = 300000
 
 inception_vox_pooling.filters0 = 16
 

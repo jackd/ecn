@@ -43,9 +43,6 @@ target = 'final'
 # TfConfig.jit = True
 clear_cache = False
 
-train_cache_dir = @train/cache/kb.path.model_dir()
-validation_cache_dir = @validation/cache/kb.path.model_dir()
-
 bucket_sizes = False
 
 # to define:

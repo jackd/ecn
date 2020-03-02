@@ -6,5 +6,7 @@ batch_size = 8
 epochs = 1000
 shuffle_buffer = 256
 
-# compiler = @ecn.utils.compile_stream_binary_classifier
+compiler = @ecn.utils.compile_binary_classifier
 problem_id = 'ncars'
+
+validation_freq = 4

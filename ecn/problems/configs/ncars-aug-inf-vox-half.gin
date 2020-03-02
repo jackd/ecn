@@ -1,0 +1,4 @@
+include 'ncars-aug-inf-vox.gin'
+inception_vox_pooling.filters0 = 8
+
+variant_id = 'half'

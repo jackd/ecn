@@ -8,7 +8,7 @@ def ncars_source(**kwargs):
     from events_tfds.events import ncars
     return TfdsSource(ncars.Ncars(),
                       split_map={'validation': 'test'},
-                      meta=dict(grid_shape=ncars.GRID_SHAPE, num_classes=2),
+                      meta=dict(grid_shape=ncars.GRID_SHAPE, num_classes=1),
                       **kwargs)
 
 
@@ -137,8 +137,10 @@ def vis_example(example,
                 reverse_xy=False,
                 flip_up_down=False,
                 class_names=None):
+    from events_tfds.vis.image import as_frame
     from events_tfds.vis.image import as_frames
     import events_tfds.vis.anim as anim
+    import matplotlib.pyplot as plt
     features, label = example
     coords = features['coords']
     time = features['time']
@@ -153,12 +155,18 @@ def vis_example(example,
     print(f'{time.shape[0]} events over {time[-1] - time[0]} dt')
     if reverse_xy:
         coords = coords[:, -1::-1]
-    frames = as_frames(coords,
-                       time,
-                       polarity,
-                       num_frames=num_frames,
-                       flip_up_down=flip_up_down)
-    anim.animate_frames(frames, fps=fps)
+
+    if num_frames == 1:
+        frame = as_frame(coords, polarity)
+        plt.imshow(frame)
+        plt.show()
+    else:
+        frames = as_frames(coords,
+                           time,
+                           polarity,
+                           num_frames=num_frames,
+                           flip_up_down=flip_up_down)
+        anim.animate_frames(frames, fps=fps)
 
 
 if __name__ == '__main__':

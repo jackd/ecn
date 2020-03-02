@@ -1,0 +1,9 @@
+include 'base.gin'
+include 'builders/vox-pool.gin'
+include 'sources/cifar10-aug8.gin'
+include 'misc/rlrp.gin'
+
+batch_size = 16
+inception_vox_pooling.reset_potential = -3.0
+inception_vox_pooling.threshold = 1.6
+inception_vox_pooling.decay_time = 4000

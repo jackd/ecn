@@ -413,12 +413,12 @@ if __name__ == '__main__':
 
     build_fn = functools.partial(
         builders.inception_vox_pooling,
-        reset_potential=-3,
-        threshold=1.0,
+        reset_potential=-1,
+        threshold=0.75,
         decay_time=1000,
         # decay_time_expansion_rate=np.sqrt(2),
         # num_levels=6,
-        initial_pooling=2
+        # initial_pooling=2
 
         # decay_time_expansion_rate=2
         #     #  num_levels=3,
@@ -431,8 +431,8 @@ if __name__ == '__main__':
     # build_fn = builders.inception_vox_pooling
     # source = sources.cifar10_dvs_source()
 
-    source = sources.asl_dvs_source()
-    # source = sources.ncars_source()
+    # source = sources.asl_dvs_source()
+    source = sources.ncars_source()
     # source = sources.ncaltech101_source()
     # build_fn = functools.partial(
     # builders.inception_multi_graph_v2,

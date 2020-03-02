@@ -1,6 +1,6 @@
 include 'base.gin'
 include 'builders/vox-pool.gin'
-include 'sources/ncars.gin'
+include 'sources/ncars-aug-inf.gin'
 include 'misc/rlrp.gin'
 
 batch_size = 16
