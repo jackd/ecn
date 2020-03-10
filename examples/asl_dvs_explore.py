@@ -13,11 +13,12 @@ for i, (example,
         label) in enumerate(tqdm(source.get_dataset(split), total=total)):
     num_events[i] = example['time'].shape[0]
 
-print(np.count_nonzero(num_events > 100000))
-print(np.count_nonzero(num_events > 200000))
-print(np.count_nonzero(num_events > 300000))
-print(np.count_nonzero(num_events > 350000))
-print(np.count_nonzero(num_events > 400000))
+# limits = [100000, 200000, 300000, 400000]
+limits = [1000, 2000, 4000, 8000, 16000, 32000]
+
+for lim in limits:
+    print(lim, np.count_nonzero(num_events > lim))
+
 plt.hist(num_events)
 plt.show()
 

@@ -3,6 +3,7 @@ include '../misc/aug.gin'
 cache_repeats = 8
 
 Augmented2DSource.base_source = @ncars_source()
+Augmented2DSource.flip_time = False
 Augmented2DSource.flip_ud = 0.5  # ncars has xy reversed, so this is really lr
 
 problem_id = 'ncars-aug8'

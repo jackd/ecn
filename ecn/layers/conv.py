@@ -240,9 +240,11 @@ class SpatioTemporalEventConv(EventConvBase):
                  filters: int,
                  temporal_kernel_size: int,
                  spatial_kernel_size: Optional[int] = None,
+                 combine: str = 'unstack',
                  **kwargs):
         if spatial_kernel_size is not None:
             spatial_kernel_size = int(spatial_kernel_size)
+        self.combine = combine
         self.spatial_kernel_size = spatial_kernel_size
         super(SpatioTemporalEventConv,
               self).__init__(filters, temporal_kernel_size, **kwargs)
@@ -282,6 +284,7 @@ class SpatioTemporalEventConv(EventConvBase):
     def get_config(self):
         config = super(SpatioTemporalEventConv, self).get_config()
         config['spatial_kernel_size'] = self.spatial_kernel_size
+        config['combine'] = self.combine
         return config
 
     def call(self, inputs):
@@ -293,6 +296,7 @@ class SpatioTemporalEventConv(EventConvBase):
             dt=dt,
             kernel=self.kernel,
             decay=self.decay,
+            combine=self.combine,
         )
         return self._finalize(features)
 
@@ -389,6 +393,15 @@ class BinaryTemporalEventConv(EventConvBase):
 @gin.configurable(module='ecn.layers')
 class TemporalEventConv(EventConvBase):
 
+    def __init__(self, *args, **kwargs):
+        self.combine = kwargs.pop('combine', 'unstack')
+        super().__init__(*args, **kwargs)
+
+    def get_config(self):
+        config = super().get_config()
+        config['combine'] = self.combine
+        return config
+
     def _kernel_shape(self, input_shape):
         filters_in = input_shape[0][-1]
         return (self.temporal_kernel_size, filters_in, self.filters)
@@ -403,6 +416,7 @@ class TemporalEventConv(EventConvBase):
             dt=dt,
             kernel=self.kernel,
             decay=self.decay,
+            combine=self.combine,
         )
         return self._finalize(features)
 

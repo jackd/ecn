@@ -7,5 +7,7 @@ batch_size = 16
 inception_vox_pooling.reset_potential = -1.0
 inception_vox_pooling.threshold = 0.75
 inception_vox_pooling.decay_time = 1000
+inception_vox_pooling.max_events = 16000
+
 
 inception_vox_pooling.filters0 = 16

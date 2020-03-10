@@ -1,0 +1,4 @@
+include 'ncars-aug8-vox.gin'
+inception_vox_pooling.filters0 = 32
+
+variant_id = 'double'

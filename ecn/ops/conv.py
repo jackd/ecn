@@ -10,6 +10,32 @@ FloatTensor = tf.Tensor
 # EXPERIMENTAL_COMPILE = False
 
 
+def map_reduce_sum(map_fn,
+                   inputs,
+                   out_shape,
+                   out_type,
+                   parallel_iterations=None,
+                   method='unstack'):
+    if method == 'fold':
+        init = tf.zeros(out_shape, dtype=out_type)
+        out = tf.foldl(lambda acc, args: acc + map_fn(args), inputs, init)
+    elif method == 'map':
+        out = tf.reduce_sum(tf.map_fn(map_fn,
+                                      inputs,
+                                      parallel_iterations=parallel_iterations,
+                                      dtype=out_type),
+                            axis=0)
+    elif method == 'vmap':
+        out = tf.reduce_sum(tf.vectorized_map(map_fn, inputs), axis=0)
+    elif method == 'unstack':
+        inputs = (tf.unstack(i, axis=0) for i in inputs)
+        out = tf.add_n([map_fn(args) for args in zip(*inputs)])
+    else:
+        raise ValueError('Invalid method {}: must be one of {}'.format(
+            method, ('fold', 'map', 'vmap', 'unstack')))
+    return out
+
+
 def as_complex_tensor(x: tf.Tensor):
     return x if x.dtype.is_complex else tf.complex(x, tf.zeros_like(x))
 
@@ -218,7 +244,8 @@ def temporal_event_conv(features: FloatTensor,
                         dt: tf.SparseTensor,
                         kernel: FloatTensor,
                         decay: FloatTensor,
-                        validate: bool = True) -> FloatTensor:
+                        validate: bool = True,
+                        combine: str = 'unstack') -> FloatTensor:
     """
     Global event convolution.
 
@@ -272,16 +299,25 @@ def temporal_event_conv(features: FloatTensor,
     #     tf.math.real(decay) if decay.dtype.is_complex else decay)
     sparse_values = tf.exp(-tf.expand_dims(decay, axis=-1) * sparse_values)
 
-    def map_fn(kernel, sparse_values):
+    def map_fn(args):
+        kernel, sparse_values = args
         st = tf.SparseTensor(sparse_indices, sparse_values, dense_shape)
         # out_features = tf.sparse.sparse_dense_matmul(st, features)
         out_features = sparse_dense_matmul(st, features)
         return tf.matmul(out_features, kernel)
 
-    kernel = tf.unstack(kernel, axis=0)
-    sparse_values = tf.unstack(sparse_values, axis=0)
-    features = tf.add_n([map_fn(k, sv) for k, sv in zip(kernel, sparse_values)])
-    return features
+    f_out = kernel.shape[-1]
+    n_out = dt.dense_shape[0]
+    out_shape = (n_out, f_out)
+    return map_reduce_sum(map_fn, (kernel, sparse_values),
+                          out_shape,
+                          kernel.dtype,
+                          method=combine)
+
+    # kernel = tf.unstack(kernel, axis=0)
+    # sparse_values = tf.unstack(sparse_values, axis=0)
+    # features = tf.add_n([map_fn(k, sv) for k, sv in zip(kernel, sparse_values)])
+    # return features
 
 
 # @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
@@ -372,7 +408,6 @@ def binary_spatio_temporal_event_conv(
 
     dt_ = _split_spatial_dt(dt, sk)
 
-    # implementation start
     kernel = tf.unstack(kernel, axis=0)
     decay = tf.unstack(decay, axis=0)
     terms = [
@@ -386,7 +421,9 @@ def binary_spatio_temporal_event_conv(
 def spatio_temporal_event_conv(
         features: FloatTensor,
         dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]],
-        kernel: FloatTensor, decay: FloatTensor) -> FloatTensor:
+        kernel: FloatTensor,
+        decay: FloatTensor,
+        combine: str = 'unstack') -> FloatTensor:
     """
     Event convolution.
 
@@ -430,7 +467,7 @@ def spatio_temporal_event_conv(
     kernel = tf.unstack(kernel, axis=0)
     decay = tf.unstack(decay, axis=0)
     terms = [
-        temporal_event_conv(features, *args, validate=False)
+        temporal_event_conv(features, *args, validate=False, combine=combine)
         for args in zip(dt_, kernel, decay)
     ]
     return tf.add_n(terms)

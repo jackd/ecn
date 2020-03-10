@@ -1,0 +1,4 @@
+include 'ncars-aug8.gin'
+Augmented2DSource.rotate_limits = (-0.7853981633974483, 0.7853981633974483)  # pi / 4
+
+problem_id = 'ncars-aug8-rot'

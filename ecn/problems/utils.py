@@ -163,7 +163,8 @@ def vis_streams(build_fn,
 
         has_polarity = 'polarity' in inputs[0]
         if has_polarity:
-            outputs = (tuple(outputs), inputs[0]['polarity'])
+            polarity = inputs[0]['polarity']
+            outputs = (tuple(outputs), polarity)
         else:
             outputs = tuple(outputs)
 
@@ -210,11 +211,12 @@ def vis_streams(build_fn,
 
             if times.shape[0] > 0:
                 img_data.append(
-                    as_frames(coords,
-                              times.numpy(),
-                              num_frames=num_frames,
-                              polarity=polarity if i == 0 else None,
-                              shape=shape))
+                    as_frames(
+                        coords,
+                        times.numpy(),
+                        num_frames=num_frames,
+                        polarity=polarity[:coords.shape[0]] if i == 0 else None,
+                        shape=shape))
 
         anim.animate_frames_multi(*img_data, fps=fps)
 
@@ -413,9 +415,14 @@ if __name__ == '__main__':
 
     build_fn = functools.partial(
         builders.inception_vox_pooling,
-        reset_potential=-1,
-        threshold=0.75,
-        decay_time=1000,
+        num_levels=3,
+        vox_start=0,
+        # reset_potential=-1.0,
+        # threshold=0.75,
+        # decay_time=1000,
+        # max_events=16000
+        # initial_pooling=2,
+        # max_events=300000,
         # decay_time_expansion_rate=np.sqrt(2),
         # num_levels=6,
         # initial_pooling=2
@@ -424,7 +431,7 @@ if __name__ == '__main__':
         #     #  num_levels=3,
         #     #  vox_start=0,
     )
-    # source = sources.nmnist_source()
+    source = sources.nmnist_source()
     # source = sources.mnist_dvs_source()
     # source = sources.cifar10_dvs_source()
 
@@ -432,7 +439,7 @@ if __name__ == '__main__':
     # source = sources.cifar10_dvs_source()
 
     # source = sources.asl_dvs_source()
-    source = sources.ncars_source()
+    # source = sources.ncars_source()
     # source = sources.ncaltech101_source()
     # build_fn = functools.partial(
     # builders.inception_multi_graph_v2,
@@ -448,9 +455,9 @@ if __name__ == '__main__':
     # print('built successfully')
 
     # vis_streams1d(build_fn, source)
-    vis_streams(build_fn, source)
+    # vis_streams(build_fn, source)
     # vis_streams(build_fn, source, group_size=group_size, skip_vis=True)
-    # vis_adjacency(build_fn, source)
+    vis_adjacency(build_fn, source)
     #     from ecn.problems.nmnist import simple_multi_graph
     #     from ecn.problems.nmnist import nmnist_source
     #     trainable = multi_grpah_trainable(simple_multi_graph,

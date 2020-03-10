@@ -86,7 +86,7 @@ def pad_ragged(rt, padding, values=0):
     flat_values = rt.values
 
     flat_values = tf.pad(rt.flat_values, [[0, padding]], constant_values=values)
-    starts, total = tf.split(rt.row_splits, [1, -1])
+    starts, total = tf.split(rt.row_splits, [-1, 1])
     row_splits = tf.concat((starts, total + padding), axis=0)
     return tf.RaggedTensor.from_row_splits(flat_values,
                                            tf.cast(row_splits, tf.int64),
