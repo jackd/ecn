@@ -1,4 +1,4 @@
-raise NotImplementedError('deprecated')
+raise NotImplementedError("deprecated")
 # from typing import Optional
 # import tensorflow as tf
 # from tensorflow.python.keras.engine import base_layer_utils  # pylint: disable=no-name-in-module,import-error

@@ -9,8 +9,7 @@ def _complex(args):
 
 
 def swish(x: tf.Tensor):
-    return tf.where(
-        tf.math.real(x) < -5, tf.zeros_like(x), x / (1 + tf.math.exp(-x)))
+    return tf.where(tf.math.real(x) < -5, tf.zeros_like(x), x / (1 + tf.math.exp(-x)))
 
 
 def modified_swish(x: tf.Tensor):
@@ -19,7 +18,7 @@ def modified_swish(x: tf.Tensor):
         # return x / tf.cast(1 + tf.math.exp(-tf.math.real(x)), tf.complex64)
         real = tf.math.real(x)
         imag = tf.math.imag(x)
-        denom = (1 + tf.math.exp(-real))
+        denom = 1 + tf.math.exp(-real)
         return tf.complex(real / denom, imag / denom)
     else:
         return swish(x)
@@ -43,7 +42,6 @@ def dropout(x, dropout_rate: float):
 
 
 class ComplexDense(tf.keras.layers.Layer):
-
     def __init__(self, units, activation=None, **kwargs):
         self.units = units
         self.activation = tf.keras.activations.get(activation)
@@ -52,12 +50,12 @@ class ComplexDense(tf.keras.layers.Layer):
     def build(self, input_shape):
         if self.built:
             return
-        self.kernel_real = self.add_weight('kernel',
-                                           shape=(input_shape[-1], self.units),
-                                           initializer='glorot_uniform')
-        self.kernel_imag = self.add_weight('kernel',
-                                           shape=(input_shape[-1], self.units),
-                                           initializer='glorot_uniform')
+        self.kernel_real = self.add_weight(
+            "kernel", shape=(input_shape[-1], self.units), initializer="glorot_uniform"
+        )
+        self.kernel_imag = self.add_weight(
+            "kernel", shape=(input_shape[-1], self.units), initializer="glorot_uniform"
+        )
         # self.kernel = tf.complex(self.kernel_real, self.kernel_imag)
         # self.kernel = self.add_weight('kernel',
         #                               shape=(input_shape[-1], self.units),
@@ -85,7 +83,7 @@ class ComplexDense(tf.keras.layers.Layer):
 
 inp = tf.keras.Input(shape=(28, 28, 1), dtype=tf.float32)
 x = tf.keras.layers.Flatten()(inp)
-x = tf.keras.layers.Dense(512, activation='relu')(x)
+x = tf.keras.layers.Dense(512, activation="relu")(x)
 x = tf.keras.layers.BatchNormalization()(x)
 x = dropout(x, 0.5)
 real = tf.keras.layers.Dense(256)(x)
@@ -109,7 +107,8 @@ model = tf.keras.Model(inp, logits)
 model.compile(
     optimizer=tf.keras.optimizers.Adam(),
     loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
+    metrics=[tf.keras.metrics.SparseCategoricalAccuracy()],
+)
 
 #################################
 
@@ -120,14 +119,15 @@ def map_fn(x, labels):
 
 builder = tfds.image.MNIST()
 builder.download_and_prepare()
-splits = ('train', 'test')
+splits = ("train", "test")
 batch_size = 32
-datasets = (
-    builder.as_dataset(split=split, as_supervised=True) for split in splits)
+datasets = (builder.as_dataset(split=split, as_supervised=True) for split in splits)
 train_ds, val_ds = (
-    ds.shuffle(128).map(map_fn).repeat().batch(batch_size) for ds in datasets)
+    ds.shuffle(128).map(map_fn).repeat().batch(batch_size) for ds in datasets
+)
 train_steps, val_steps = (
-    builder.info.splits[split].num_examples // batch_size for split in splits)
+    builder.info.splits[split].num_examples // batch_size for split in splits
+)
 
 model.fit(
     train_ds,

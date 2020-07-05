@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+
 import ecn.multi_graph.core as core
 import ecn.multi_graph.debug as debug
 
@@ -14,12 +15,12 @@ def pre_batch_map(xy, label):
 
 
 def post_batch_map(z, label):
-    f = z**2
+    f = z ** 2
     return (f,), label
 
 
 def model_fn(z):
-    return tf.keras.layers.Dense(2, kernel_initializer='ones')(z)
+    return tf.keras.layers.Dense(2, kernel_initializer="ones")(z)
 
 
 def build_fn(xy, label):
@@ -37,27 +38,24 @@ def build_fn(xy, label):
 
 
 class CoreMultiGraphTest(tf.test.TestCase):
-
     def test_subgraph(self):
-
         def f(x, y0, y1):
             y = y0 + y1
-            return x**2 + y, x + y**2
+            return x ** 2 + y, x + y ** 2
 
         graph = tf.Graph()
 
         with graph.as_default():
-            x = tf.constant(2.)
-            y0 = tf.constant(3.)
-            y1 = tf.constant(4.)
+            x = tf.constant(2.0)
+            y0 = tf.constant(3.0)
+            y1 = tf.constant(4.0)
             z = f(x, y0, y1)
-            tf.keras.layers.Dense(3)(tf.random.uniform((10, 5),
-                                                       dtype=tf.float32))
+            tf.keras.layers.Dense(3)(tf.random.uniform((10, 5), dtype=tf.float32))
 
         fn = core.subgraph(graph.as_graph_def(add_shapes=True), (x, y0, y1), z)
-        x = tf.constant(5.)
-        y0 = tf.constant(6.)
-        y1 = tf.constant(7.)
+        x = tf.constant(5.0)
+        y0 = tf.constant(6.0)
+        y1 = tf.constant(7.0)
         actual = fn(x, y0, y1)
         expected = f(x, y0, y1)
 
@@ -74,18 +72,18 @@ class CoreMultiGraphTest(tf.test.TestCase):
         y = tf.constant(y)
 
         label = tf.zeros((), dtype=tf.int64)
-        actual_out, actual_labels = debug.debug_build_fn(build_fn,
-                                                         ((x, y), label),
-                                                         batch_size=batch_size)
+        actual_out, actual_labels = debug.debug_build_fn(
+            build_fn, ((x, y), label), batch_size=batch_size
+        )
 
         expected_out = tf.tile(tf.expand_dims(x * y, 0), (batch_size, 1))
         expected_labels = tf.zeros((batch_size,), dtype=tf.int64)
         expected_out, expected_labels = post_batch_map(expected_out, label)
         expected_out = model_fn(*expected_out)
 
-        (actual_out, actual_labels, expected_out,
-         expected_labels) = self.evaluate(
-             (actual_out, actual_labels, expected_out, expected_labels))
+        (actual_out, actual_labels, expected_out, expected_labels) = self.evaluate(
+            (actual_out, actual_labels, expected_out, expected_labels)
+        )
         np.testing.assert_allclose(actual_out, expected_out)
         np.testing.assert_allclose(actual_labels, expected_labels)
 
@@ -112,8 +110,12 @@ class CoreMultiGraphTest(tf.test.TestCase):
         actual_out = built.trained_model(actual_z)
 
         # expected
-        processed = dataset.map(pre_cache_map).map(pre_batch_map).batch(
-            batch_size).map(post_batch_map)
+        processed = (
+            dataset.map(pre_cache_map)
+            .map(pre_batch_map)
+            .batch(batch_size)
+            .map(post_batch_map)
+        )
         expected_z = None
         expected_labels = None
         for expected_z, expected_labels in processed.take(1):
@@ -122,12 +124,13 @@ class CoreMultiGraphTest(tf.test.TestCase):
 
         # compare
         actual_out, actual_label, expected_out, expected_label = self.evaluate(
-            (actual_out, actual_labels, expected_out, expected_labels))
+            (actual_out, actual_labels, expected_out, expected_labels)
+        )
         np.testing.assert_allclose(actual_out, expected_out)
         np.testing.assert_allclose(actual_label, expected_label)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     tf.test.main()
     # CoreMultiGraphTest().test_subgraph()
     # CoreMultiGraphTest().test_build_multi_graph()

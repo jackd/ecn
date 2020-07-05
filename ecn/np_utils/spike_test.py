@@ -1,14 +1,13 @@
-import numpy as np
 import unittest
-from ecn.np_utils import spike
-from ecn.np_utils import utils
+
+import numpy as np
+
+from ecn.np_utils import spike, utils
 
 
 class SpikeTest(unittest.TestCase):
-
     def test_global_spike(self):
-        times = np.array([0, 1, 2, 3, 4, 100, 110, 111, 112, 113],
-                         dtype=np.int64)
+        times = np.array([0, 1, 2, 3, 4, 100, 110, 111, 112, 113], dtype=np.int64)
         actual = spike.global_spike_threshold(times, 5, 2, -2)
         np.testing.assert_equal(actual, [2, 112])
 
@@ -26,7 +25,8 @@ class SpikeTest(unittest.TestCase):
             coords,
             grid_indices=np.array([0, 1]),
             grid_splits=np.array([0, 1, 2]),
-            **kwargs)
+            **kwargs
+        )
 
         actual_t0 = actual_t[actual_c == 0]
         actual_t1 = actual_t[actual_c == 1]
@@ -37,6 +37,6 @@ class SpikeTest(unittest.TestCase):
         np.testing.assert_equal(actual_t1, expected_t1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
     # SpikeTest().test_spike()

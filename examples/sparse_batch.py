@@ -9,8 +9,7 @@ dataset = tf.data.Dataset.from_tensor_slices(ij)
 
 
 def map_fn(ij):
-    return tf.SparseTensor(ij, tf.ones((tf.shape(ij)[0],), dtype=tf.bool),
-                           (-1, -1))
+    return tf.SparseTensor(ij, tf.ones((tf.shape(ij)[0],), dtype=tf.bool), (-1, -1))
 
 
 dataset = dataset.map(map_fn).batch(3)

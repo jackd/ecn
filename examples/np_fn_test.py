@@ -1,8 +1,8 @@
 import functools
-import timeit
-import tensorflow as tf
-import numpy as np
+
 import numba
+import numpy as np
+import tensorflow as tf
 
 
 @numba.njit()
@@ -22,13 +22,13 @@ graph_def = graph.as_graph_def(add_shapes=True)
 
 
 def subgraph(graph_def, input_op_names, output_names):
-
     @tf.function
     def f(*inputs):
-        return tf.graph_util.import_graph_def(graph_def,
-                                              input_map=dict(
-                                                  zip(input_op_names, inputs)),
-                                              return_elements=output_names)
+        return tf.graph_util.import_graph_def(
+            graph_def,
+            input_map=dict(zip(input_op_names, inputs)),
+            return_elements=output_names,
+        )
 
     return f
 

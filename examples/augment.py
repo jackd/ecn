@@ -1,6 +1,6 @@
 # import numpy as np
-from ecn.problems import sources
-from ecn.problems import augment
+from ecn.problems import augment, sources
+
 # from events_tfds.events.cifar10_dvs import CLASSES
 # base_source = sources.nmnist_source()
 # base_source = sources.cifar10_dvs_source()
@@ -17,14 +17,15 @@ aug_source = augment.Augmented2DSource(
     # rotate_limits=(-np.pi, np.pi),  # exaggerate
 )
 for source in (base_source, aug_source):
-    print(source.examples_per_epoch('train'))
-    print(source.examples_per_epoch('validation'))
+    print(source.examples_per_epoch("train"))
+    print(source.examples_per_epoch("validation"))
 
-for example in aug_source.get_dataset('train'):
+for example in aug_source.get_dataset("train"):
     sources.vis_example(
         example,
         # reverse_xy=True,
         # flip_up_down=True,
         num_frames=1,
         fps=4,
-        class_names=CLASSES)
+        class_names=CLASSES,
+    )

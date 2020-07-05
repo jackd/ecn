@@ -1,7 +1,8 @@
-from typing import Callable, Tuple, Iterable
+from typing import Tuple
 
-import numpy as np
 import numba as nb
+import numpy as np
+
 from . import utils
 
 FloatArray = np.ndarray
@@ -9,11 +10,13 @@ IntArray = np.ndarray
 
 
 @nb.njit()
-def global_spike_threshold(times: IntArray,
-                           decay_time: int,
-                           threshold: float = 2.,
-                           reset_potential: float = -2.,
-                           max_out_events: int = -1) -> IntArray:
+def global_spike_threshold(
+    times: IntArray,
+    decay_time: int,
+    threshold: float = 2.0,
+    reset_potential: float = -2.0,
+    max_out_events: int = -1,
+) -> IntArray:
     """
 
     Returns:
@@ -24,7 +27,7 @@ def global_spike_threshold(times: IntArray,
     out_times = np.empty((max_out_events,), dtype=times.dtype)
 
     out_events = 0
-    potential = 0.
+    potential = 0.0
     t0 = 0
     for t1 in times:
         potential *= np.exp((t0 - t1) / decay_time)
@@ -42,14 +45,16 @@ def global_spike_threshold(times: IntArray,
 
 
 @nb.njit()
-def spike_threshold(times: IntArray,
-                    coords: IntArray,
-                    grid_indices: IntArray,
-                    grid_splits: IntArray,
-                    decay_time: int,
-                    threshold: float = 2.,
-                    reset_potential: float = -2.,
-                    out_size: int = -1) -> Tuple[IntArray, IntArray]:
+def spike_threshold(
+    times: IntArray,
+    coords: IntArray,
+    grid_indices: IntArray,
+    grid_splits: IntArray,
+    decay_time: int,
+    threshold: float = 2.0,
+    reset_potential: float = -2.0,
+    out_size: int = -1,
+) -> Tuple[IntArray, IntArray]:
     """
     Get event outputs.
 
@@ -71,8 +76,7 @@ def spike_threshold(times: IntArray,
     max_out_events = times.size
     in_events = times.size
     if in_events == 0:
-        return np.empty((0,), dtype=times.dtype), np.empty((0,),
-                                                           dtype=coords.dtype)
+        return np.empty((0,), dtype=times.dtype), np.empty((0,), dtype=coords.dtype)
     if out_size == -1:
         out_size = np.max(grid_indices) + 1
 

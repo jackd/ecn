@@ -1,8 +1,9 @@
-from typing import Iterable, Tuple, Union
-import numpy as np
+from typing import Tuple
+
 import numba as nb
-from . import utils
-from . import ragged
+import numpy as np
+
+from . import ragged, utils
 
 IntArray = np.ndarray
 
@@ -71,7 +72,7 @@ IntArray = np.ndarray
 #                 yield (c0, *rest)
 
 
-@nb.njit(inline='always')
+@nb.njit(inline="always")
 def ravel_multi_index(indices, dims):
     """
     See `np.ravel_multi_index`.
@@ -79,7 +80,7 @@ def ravel_multi_index(indices, dims):
     Note this version accepts negative indices without raising.
     """
     ndim = len(dims)
-    assert (len(indices) == ndim)
+    assert len(indices) == ndim
     acc = indices[-1].copy()
     stride = dims[-1]
     for i in range(ndim - 2, -1, -1):
@@ -91,8 +92,9 @@ def ravel_multi_index(indices, dims):
 # @nb.njit(inline='always')
 def unravel_index(indices: IntArray, shape, dtype=None) -> IntArray:
     ndim = len(shape)
-    out = np.empty((ndim, indices.size),
-                   dtype=indices.dtype if dtype is None else dtype)
+    out = np.empty(
+        (ndim, indices.size), dtype=indices.dtype if dtype is None else dtype
+    )
     indices = indices.copy()
     for n in range(ndim - 1, 0, -1):
         s = shape[n]
@@ -103,11 +105,12 @@ def unravel_index(indices: IntArray, shape, dtype=None) -> IntArray:
     return out
 
 
-@nb.njit(inline='always')
+@nb.njit(inline="always")
 def unravel_index_transpose(indices: IntArray, shape, dtype=None) -> IntArray:
     ndim = len(shape)
-    out = np.empty((indices.size, ndim),
-                   dtype=indices.dtype if dtype is None else dtype)
+    out = np.empty(
+        (indices.size, ndim), dtype=indices.dtype if dtype is None else dtype
+    )
     indices = indices.copy()
     for n in range(ndim - 1, 0, -1):
         s = shape[n]
@@ -117,7 +120,7 @@ def unravel_index_transpose(indices: IntArray, shape, dtype=None) -> IntArray:
     return out
 
 
-@nb.njit(inline='always')
+@nb.njit(inline="always")
 def ravel_multi_index_transpose(indices: IntArray, dims):
     """
     Equivalent to `ravel_multi_index(indices.T, dims)`.
@@ -205,8 +208,9 @@ def base_grid_coords(shape: IntArray):
 
 
 @nb.njit()
-def grid_coords(in_shape: IntArray, kernel_shape: IntArray, strides: IntArray,
-                padding: IntArray) -> Tuple[IntArray, IntArray]:
+def grid_coords(
+    in_shape: IntArray, kernel_shape: IntArray, strides: IntArray, padding: IntArray
+) -> Tuple[IntArray, IntArray]:
     """
     Get the coordinates of the top left of each kernel region in input coords.
 
@@ -226,9 +230,9 @@ def grid_coords(in_shape: IntArray, kernel_shape: IntArray, strides: IntArray,
 
 
 @nb.njit()
-def sparse_neighborhood(in_shape: IntArray, kernel_shape: IntArray,
-                        strides: IntArray, padding: IntArray
-                       ) -> Tuple[IntArray, IntArray, IntArray, IntArray]:
+def sparse_neighborhood(
+    in_shape: IntArray, kernel_shape: IntArray, strides: IntArray, padding: IntArray
+) -> Tuple[IntArray, IntArray, IntArray, IntArray]:
     ndim = len(in_shape)
     coords_nd, out_shape = grid_coords(in_shape, kernel_shape, strides, padding)
     offset = base_grid_coords(kernel_shape)
@@ -248,7 +252,6 @@ def sparse_neighborhood(in_shape: IntArray, kernel_shape: IntArray,
     valid_coords = flat_coords[valid]
     valid_partitions = partitions[valid]
     coords_1d = ravel_multi_index_transpose(valid_coords, in_shape)
-    lengths = np.count_nonzero(np.reshape(valid, (-1, offset.shape[0])),
-                               axis=-1)
+    lengths = np.count_nonzero(np.reshape(valid, (-1, offset.shape[0])), axis=-1)
     splits = ragged.lengths_to_splits(lengths)
     return valid_partitions, coords_1d, splits, out_shape

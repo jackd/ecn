@@ -1,11 +1,10 @@
 import numpy as np
 import tensorflow as tf
-from ecn.ops import conv_v2
-from ecn.ops import conv
+
+from ecn.ops import conv, conv_v2
 
 
 class ConvOpsV2Test(tf.test.TestCase):
-
     def test_spatio_temporal_event_conv(self):
         n_in = 7
         n_out = 17
@@ -34,8 +33,7 @@ class ConvOpsV2Test(tf.test.TestCase):
         ijs = tf.dynamic_partition(ij, s, sk)
         dt_values = tf.dynamic_partition(dt_values, s, sk)
         dts = [
-            tf.SparseTensor(ij, vals, (n_out, n_in))
-            for ij, vals in zip(ijs, dt_values)
+            tf.SparseTensor(ij, vals, (n_out, n_in)) for ij, vals in zip(ijs, dt_values)
         ]
 
         v1 = conv.spatio_temporal_event_conv(features, dts, kernel, decay)
@@ -43,7 +41,7 @@ class ConvOpsV2Test(tf.test.TestCase):
         np.testing.assert_allclose(v1, v2, atol=1e-3)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # tf.test.main()
 
     ConvOpsV2Test().test_spatio_temporal_event_conv()

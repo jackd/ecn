@@ -1,34 +1,34 @@
 from typing import Sequence
-from tqdm import tqdm
+
 import tensorflow as tf
 import tensorflow_datasets as tfds
+from tqdm import tqdm
 
-from kblocks.keras import layers
-from ecn.problems import sources
 from ecn import components as comp
-from ecn.problems.utils import multi_graph_trainable
+from ecn.problems import sources
 from ecn.problems.builders import inception_multi_graph
-from ecn.ops import spike as spike_ops
-from ecn.ops import neighbors as neigh_ops
-from ecn.ops import grid as grid_ops
+from ecn.problems.utils import multi_graph_trainable
+from kblocks.keras import layers
 
 
-def simple_multi_graph(features,
-                       labels,
-                       weights=None,
-                       num_classes=10,
-                       grid_shape=(34, 34),
-                       decay_time=10000,
-                       spatial_buffer=32,
-                       reset_potential=-2.0,
-                       threshold=1.0,
-                       filters0: int = 32,
-                       kt0: int = 4,
-                       hidden_units: Sequence[int] = (128,),
-                       dropout_rate: float = 0.4):
-    times = features['time']
-    coords = features['coords']
-    polarity = features['polarity']
+def simple_multi_graph(
+    features,
+    labels,
+    weights=None,
+    num_classes=10,
+    grid_shape=(34, 34),
+    decay_time=10000,
+    spatial_buffer=32,
+    reset_potential=-2.0,
+    threshold=1.0,
+    filters0: int = 32,
+    kt0: int = 4,
+    hidden_units: Sequence[int] = (128,),
+    dropout_rate: float = 0.4,
+):
+    times = features["time"]
+    coords = features["coords"]
+    polarity = features["polarity"]
     filters = filters0
 
     spike_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
@@ -39,11 +39,9 @@ def simple_multi_graph(features,
     in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=5000)
     # in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=None)
 
-    out_stream = comp.spike_threshold(in_stream,
-                                      link,
-                                      decay_time=decay_time,
-                                      min_mean_size=1024,
-                                      **spike_kwargs)
+    out_stream = comp.spike_threshold(
+        in_stream, link, decay_time=decay_time, min_mean_size=1024, **spike_kwargs
+    )
 
     features = in_stream.prepare_model_inputs(polarity)
     features = tf.keras.layers.Lambda(lambda x: tf.identity(x.values))(features)
@@ -53,11 +51,11 @@ def simple_multi_graph(features,
         in_stream,
         out_stream,
         decay_time=decay_time,
-        spatial_buffer_size=spatial_buffer)
-    features = convolver.convolve(features,
-                                  filters=filters,
-                                  temporal_kernel_size=kt0,
-                                  activation='relu')
+        spatial_buffer_size=spatial_buffer,
+    )
+    features = convolver.convolve(
+        features, filters=filters, temporal_kernel_size=kt0, activation="relu"
+    )
     features = layers.BatchNormalization()(features)
     in_stream = out_stream
     del out_stream
@@ -72,32 +70,34 @@ def simple_multi_graph(features,
             in_stream,
             in_stream,
             decay_time=decay_time,
-            spatial_buffer_size=spatial_buffer)
-        features = ip_convolver.convolve(features,
-                                         filters=filters,
-                                         temporal_kernel_size=kt0,
-                                         activation='relu')
+            spatial_buffer_size=spatial_buffer,
+        )
+        features = ip_convolver.convolve(
+            features, filters=filters, temporal_kernel_size=kt0, activation="relu"
+        )
         features = layers.BatchNormalization()(features)
         features = layers.Dropout(dropout_rate)(features)
 
         link = in_stream.grid.link((5, 5), (2, 2), (2, 2))
-        out_stream = comp.spike_threshold(in_stream,
-                                          link,
-                                          decay_time=decay_time,
-                                          min_mean_size=min_mean_size,
-                                          **spike_kwargs)
+        out_stream = comp.spike_threshold(
+            in_stream,
+            link,
+            decay_time=decay_time,
+            min_mean_size=min_mean_size,
+            **spike_kwargs
+        )
 
         ds_convolver = comp.spatio_temporal_convolver(
             link,
             in_stream,
             out_stream,
             decay_time=decay_time,
-            spatial_buffer_size=spatial_buffer)
+            spatial_buffer_size=spatial_buffer,
+        )
 
-        features = ds_convolver.convolve(features,
-                                         filters=filters,
-                                         temporal_kernel_size=kt0,
-                                         activation='relu')
+        features = ds_convolver.convolve(
+            features, filters=filters, temporal_kernel_size=kt0, activation="relu"
+        )
         features = layers.BatchNormalization()(features)
         features = layers.Dropout(dropout_rate)(features)
 
@@ -106,35 +106,32 @@ def simple_multi_graph(features,
         decay_time *= 2
         filters *= 2
 
-    global_stream = comp.global_spike_threshold(in_stream,
-                                                decay_time=decay_time,
-                                                min_mean_size=32,
-                                                **spike_kwargs)
-    flat_convolver = comp.flatten_convolver(in_stream, global_stream,
-                                            decay_time)
-    features = flat_convolver.convolve(features,
-                                       filters=filters,
-                                       temporal_kernel_size=kt0,
-                                       activation='relu')
+    global_stream = comp.global_spike_threshold(
+        in_stream, decay_time=decay_time, min_mean_size=32, **spike_kwargs
+    )
+    flat_convolver = comp.flatten_convolver(in_stream, global_stream, decay_time)
+    features = flat_convolver.convolve(
+        features, filters=filters, temporal_kernel_size=kt0, activation="relu"
+    )
     features = layers.BatchNormalization()(features)
     decay_time *= 2
     filters *= 2
-    temporal_convolver = comp.temporal_convolver(global_stream, global_stream,
-                                                 decay_time)
-    features = temporal_convolver.convolve(features,
-                                           filters=filters,
-                                           temporal_kernel_size=kt0 * 2,
-                                           activation='relu')
+    temporal_convolver = comp.temporal_convolver(
+        global_stream, global_stream, decay_time
+    )
+    features = temporal_convolver.convolve(
+        features, filters=filters, temporal_kernel_size=kt0 * 2, activation="relu"
+    )
     features = layers.BatchNormalization()(features)
     features = layers.Dropout(dropout_rate)(features)
     for h in hidden_units:
-        features = layers.Dense(h, activation='relu')(features)
+        features = layers.Dense(h, activation="relu")(features)
         features = layers.BatchNormalization()(features)
         features = layers.Dropout(dropout_rate)(features)
-    logits = layers.Dense(num_classes, activation=None, name='stream')(features)
-    final_logits = tf.keras.layers.Lambda(
-        lambda args: tf.gather(*args),
-        name='final')([logits, global_stream.model_row_ends])
+    logits = layers.Dense(num_classes, activation=None, name="stream")(features)
+    final_logits = tf.keras.layers.Lambda(lambda args: tf.gather(*args), name="final")(
+        [logits, global_stream.model_row_ends]
+    )
 
     outputs = (final_logits, logits)
 
@@ -143,19 +140,22 @@ def simple_multi_graph(features,
     return outputs, labels, weights
 
 
-source = sources.nmnist_source(read_config=tfds.ReadConfig(
-    interleave_block_length=1, interleave_parallel_reads=1))
-split = 'train'
+source = sources.nmnist_source(
+    read_config=tfds.ReadConfig(interleave_block_length=1, interleave_parallel_reads=1)
+)
+split = "train"
 
 # build_fn = simple_multi_graph
 build_fn = inception_multi_graph
 batch_size = 32
-trainable = multi_graph_trainable(build_fn,
-                                  source,
-                                  batch_size,
-                                  use_cache=True,
-                                  cache_dir='/tmp/ecn_tests/memory_test',
-                                  clear_cache=True)
+trainable = multi_graph_trainable(
+    build_fn,
+    source,
+    batch_size,
+    use_cache=True,
+    cache_dir="/tmp/ecn_tests/memory_test",
+    clear_cache=True,
+)
 source = trainable.source
 ds = source.get_dataset(split)
 total = source.examples_per_epoch(split)

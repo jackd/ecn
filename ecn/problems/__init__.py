@@ -1,18 +1,17 @@
 import os
+
 from kblocks.gin_utils.config import try_register_config_dir
 
-ECN_CONFIG_DIR = os.path.realpath(
-    os.path.join(os.path.dirname(__file__), 'configs'))
+from . import augment, builders, sources
 
-try_register_config_dir('ECN_CONFIG', ECN_CONFIG_DIR)
+ECN_CONFIG_DIR = os.path.realpath(os.path.join(os.path.dirname(__file__), "configs"))
 
-from . import augment
-from . import builders
-from . import sources
+try_register_config_dir("ECN_CONFIG", ECN_CONFIG_DIR)
+
 
 __all__ = [
-    'augment',
-    'builders',
-    'sources',
-    'ECN_CONFIG_DIR',
+    "augment",
+    "builders",
+    "sources",
+    "ECN_CONFIG_DIR",
 ]

@@ -1,4 +1,4 @@
-raise NotImplementedError('deprecated')
+raise NotImplementedError("deprecated")
 # # import os
 # # os.environ['NUMBA_DISABLE_JIT'] = '1'
 # from typing import Tuple

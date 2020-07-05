@@ -1,11 +1,11 @@
 import unittest
+
 import numpy as np
 
 import ecn.np_utils.buffer as bu
 
 
 class BufferTest(unittest.TestCase):
-
     def test_discard_left(self):
         start_stop = np.array([3, 2])
         mod = 5
@@ -41,5 +41,5 @@ class BufferTest(unittest.TestCase):
         np.testing.assert_equal(indices, [])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

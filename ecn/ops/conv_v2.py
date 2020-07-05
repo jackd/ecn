@@ -1,4 +1,5 @@
 import tensorflow as tf
+
 from . import conv as _base_ops
 
 FloatTensor = tf.Tensor
@@ -10,8 +11,7 @@ _validate_dtype = _base_ops._validate_dtype
 temporal_event_conv = _base_ops.temporal_event_conv
 
 
-def spatial_event_conv(features: FloatTensor, sp: tf.SparseTensor,
-                       kernel: FloatTensor):
+def spatial_event_conv(features: FloatTensor, sp: tf.SparseTensor, kernel: FloatTensor):
     """
     Spatial event convolution.
 
@@ -28,8 +28,8 @@ def spatial_event_conv(features: FloatTensor, sp: tf.SparseTensor,
     features.shape.assert_has_rank(2)
     kernel.shape.assert_has_rank(3)
     sk, f_in, f_out = kernel.shape
-    assert (all(d is not None for d in (sk, f_in, f_out)))
-    assert (features.shape[1] == f_in)
+    assert all(d is not None for d in (sk, f_in, f_out))
+    assert features.shape[1] == f_in
     n_out = -1
 
     x = tf.sparse.sparse_dense_matmul(sp, features)
@@ -39,9 +39,9 @@ def spatial_event_conv(features: FloatTensor, sp: tf.SparseTensor,
     return x
 
 
-def spatio_temporal_event_conv(features: FloatTensor, dt: tf.SparseTensor,
-                               kernel: FloatTensor,
-                               decay: FloatTensor) -> FloatTensor:
+def spatio_temporal_event_conv(
+    features: FloatTensor, dt: tf.SparseTensor, kernel: FloatTensor, decay: FloatTensor
+) -> FloatTensor:
     """
     Event convolution.
 
@@ -64,19 +64,19 @@ def spatio_temporal_event_conv(features: FloatTensor, dt: tf.SparseTensor,
         [n_out, f_out] output features.
     """
     if decay.dtype.is_complex:
-        assert (kernel.dtype.is_complex)
+        assert kernel.dtype.is_complex
         features = as_complex(features)
     decay.shape.assert_has_rank(2)
     kernel.shape.assert_has_rank(4)
     _validate_dtype(decay)
     tk, sk = decay.shape
-    assert (tk is not None)
-    assert (sk is not None)
+    assert tk is not None
+    assert sk is not None
 
     _validate_dtype(kernel)
 
-    assert (kernel.shape[:2] == (tk, sk))
-    assert (kernel.shape[-2] == features.shape[-1])
+    assert kernel.shape[:2] == (tk, sk)
+    assert kernel.shape[-2] == features.shape[-1]
     features.shape.assert_has_rank(2)
 
     # implementation start

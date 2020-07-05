@@ -1,21 +1,22 @@
-from typing import Optional, Tuple
 import os
-import numpy as np
-import numba as nb
+from typing import Optional, Tuple
 
-PARALLEL = os.environ.get('NUMBA_PARALLEL', '1') != '0'
+import numba as nb
+import numpy as np
+
+PARALLEL = os.environ.get("NUMBA_PARALLEL", "1") != "0"
 IntArray = np.ndarray
 
 
-@nb.njit(inline='always')
+@nb.njit(inline="always")
 def double_length(x):
     return np.concatenate((x, np.empty_like(x)), axis=0)
 
 
-@nb.njit(inline='always')
+@nb.njit(inline="always")
 def max_on_axis(x: np.ndarray, axis=0, out: Optional[np.ndarray] = None):
     if axis != 0 or x.ndim != 2:
-        raise NotImplementedError('TODO')
+        raise NotImplementedError("TODO")
     nd = x.shape[1]
     if out is None:
         out = np.empty((nd,), dtype=x.dtype)
@@ -26,10 +27,10 @@ def max_on_axis(x: np.ndarray, axis=0, out: Optional[np.ndarray] = None):
     return out
 
 
-@nb.njit(inline='always')
+@nb.njit(inline="always")
 def min_on_axis(x: np.ndarray, axis=0, out: Optional[np.ndarray] = None):
     if axis != 0 or x.ndim != 2:
-        raise NotImplementedError('TODO')
+        raise NotImplementedError("TODO")
     nd = x.shape[1]
     if out is None:
         out = np.empty((nd,), dtype=x.dtype)
@@ -40,7 +41,7 @@ def min_on_axis(x: np.ndarray, axis=0, out: Optional[np.ndarray] = None):
     return out
 
 
-@nb.njit(inline='always')
+@nb.njit(inline="always")
 def min_on_leading_axis(x: np.ndarray):
     out = np.empty((x.shape[1],), dtype=x.dtype)
     # errors using nb.prange...
@@ -75,8 +76,9 @@ def min_on_leading_axis(x: np.ndarray):
 
 
 @nb.njit()
-def merge(times0: IntArray, coords0: IntArray, times1: IntArray,
-          coords1: IntArray) -> Tuple[IntArray, IntArray]:
+def merge(
+    times0: IntArray, coords0: IntArray, times1: IntArray, coords1: IntArray
+) -> Tuple[IntArray, IntArray]:
     total = times0.size + times1.size
     i0 = 0
     i1 = 0
@@ -98,7 +100,7 @@ def merge(times0: IntArray, coords0: IntArray, times1: IntArray,
     return out_times, out_coords
 
 
-@nb.njit(inline='always')
+@nb.njit(inline="always")
 def prod(x):
     p = 1
     for xi in x:

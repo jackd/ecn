@@ -2,10 +2,12 @@
 # os.environ['NUMBA_DISABLE_JIT'] = '1'
 
 import unittest
+
 import numpy as np
-import ecn.np_utils.neighbors as neigh
-import ecn.np_utils.grid as grid
 from scipy.sparse import coo_matrix
+
+import ecn.np_utils.grid as grid
+import ecn.np_utils.neighbors as neigh
 
 
 def ragged_to_sparse(indices, splits, values, shape):
@@ -15,7 +17,6 @@ def ragged_to_sparse(indices, splits, values, shape):
 
 
 class NeighborsTest(unittest.TestCase):
-
     def test_reindex(self):
         np.random.seed(123)
         n_in = 100
@@ -35,8 +36,7 @@ class NeighborsTest(unittest.TestCase):
         mask = np.zeros((n_in,), dtype=np.bool)
         mask[indices] = True
         if np.all(mask):
-            raise RuntimeError(
-                'test isn\'t going to work if all inputs are used.')
+            raise RuntimeError("test isn't going to work if all inputs are used.")
         n_in = np.count_nonzero(mask)
 
         # masked_indices, masked_splits = neigh.mask_ragged_cols(
@@ -119,7 +119,8 @@ class NeighborsTest(unittest.TestCase):
             np.array((3, 4)),
             np.array((3, 3)),
             strides=np.array((1, 1)),
-            padding=np.array((1, 1)))
+            padding=np.array((1, 1)),
+        )
         np.testing.assert_equal(out_shape, (3, 4))
         in_coords = np.array((0, 11, 5))
         out_coords = np.array((0, 11))
@@ -176,17 +177,15 @@ class NeighborsTest(unittest.TestCase):
         grid_size = 10
         t_end = 10000
         in_times = np.random.uniform(high=t_end, size=in_size).astype(np.int64)
-        in_coords = np.random.uniform(high=grid_size,
-                                      size=in_size).astype(np.int64)
+        in_coords = np.random.uniform(high=grid_size, size=in_size).astype(np.int64)
         in_times.sort()
-        out_times = np.random.uniform(high=t_end,
-                                      size=out_size).astype(np.int64)
-        out_coords = np.random.uniform(high=grid_size,
-                                       size=out_size).astype(np.int64)
+        out_times = np.random.uniform(high=t_end, size=out_size).astype(np.int64)
+        out_coords = np.random.uniform(high=grid_size, size=out_size).astype(np.int64)
         out_times.sort()
 
         partitions, indices, splits, out_shape = grid.sparse_neighborhood(
-            np.array([grid_size]), np.array([1]), np.array([1]), np.array([0]))
+            np.array([grid_size]), np.array([1]), np.array([1]), np.array([0])
+        )
         np.testing.assert_equal(out_shape, [grid_size])
         np.testing.assert_equal(partitions, 0)
         np.testing.assert_equal(indices, np.arange(grid_size))
@@ -194,7 +193,8 @@ class NeighborsTest(unittest.TestCase):
 
         spatial_buffer_size = 32
         actual_indices, actual_splits = neigh.compute_pointwise_neighbors(
-            in_times, in_coords, out_times, out_coords, spatial_buffer_size)
+            in_times, in_coords, out_times, out_coords, spatial_buffer_size
+        )
         part, expected_indices, expected_splits = neigh.compute_neighbors(
             in_times,
             in_coords,
@@ -208,10 +208,10 @@ class NeighborsTest(unittest.TestCase):
         np.testing.assert_equal(part, 0)
         np.testing.assert_equal(actual_indices, expected_indices)
         np.testing.assert_equal(actual_splits, expected_splits)
-        assert (len(actual_indices) > 0)
+        assert len(actual_indices) > 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # NeighborsTest().test_compute_neighbors_2d_finite()
     # NeighborsTest().test_compute_neighbors_1d_finite()
     # NeighborsTest().test_neighborhood_args_as_1d()

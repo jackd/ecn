@@ -1,13 +1,9 @@
-from . import grid
-from . import utils
-from . import ragged
-from . import neighbors
-from . import spike
+from . import grid, neighbors, ragged, spike, utils
 
 __all__ = [
-    'grid',
-    'utils',
-    'ragged',
-    'neighbors',
-    'spike',
+    "grid",
+    "utils",
+    "ragged",
+    "neighbors",
+    "spike",
 ]

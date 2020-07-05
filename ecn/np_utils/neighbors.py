@@ -1,10 +1,9 @@
-from typing import Tuple, Optional, Union
+from typing import Optional, Tuple
 
-import numpy as np
 import numba as nb
+import numpy as np
 
-from . import buffer
-from . import utils
+from . import buffer, utils
 
 FloatArray = np.ndarray
 IntArray = np.ndarray
@@ -12,10 +11,12 @@ BoolArray = np.ndarray
 
 
 @nb.njit()
-def compute_pooled_neighbors(in_times: IntArray,
-                             out_times: IntArray,
-                             event_duration: Optional[int] = None,
-                             max_neighbors: int = -1):
+def compute_pooled_neighbors(
+    in_times: IntArray,
+    out_times: IntArray,
+    event_duration: Optional[int] = None,
+    max_neighbors: int = -1,
+):
     dtype = in_times.dtype
     out_size = out_times.size
     if max_neighbors == -1:
@@ -43,7 +44,7 @@ def compute_pooled_neighbors(in_times: IntArray,
                 i += 1
                 if i == in_size:
                     # early exit
-                    splits[o + 1:] = ii
+                    splits[o + 1 :] = ii
                     return indices[:ii], splits
                 it = in_times[i]
 
@@ -65,12 +66,13 @@ def compute_pooled_neighbors(in_times: IntArray,
 
 
 @nb.njit()
-def compute_full_neighbors(in_times: IntArray,
-                           in_coords: IntArray,
-                           out_times: IntArray,
-                           event_duration: Optional[int] = None,
-                           max_neighbors: int = -1
-                          ) -> Tuple[IntArray, IntArray, IntArray]:
+def compute_full_neighbors(
+    in_times: IntArray,
+    in_coords: IntArray,
+    out_times: IntArray,
+    event_duration: Optional[int] = None,
+    max_neighbors: int = -1,
+) -> Tuple[IntArray, IntArray, IntArray]:
     """
     Same as compute_pooled_neighbors, except we record the coordinates as well.
     """
@@ -103,7 +105,7 @@ def compute_full_neighbors(in_times: IntArray,
                 i += 1
                 if i == in_size:
                     # early exit
-                    splits[o + 1:] = ii
+                    splits[o + 1 :] = ii
                     return partitions[:ii], indices[:ii], splits
                 it = in_times[i]
 
@@ -127,20 +129,20 @@ def compute_full_neighbors(in_times: IntArray,
 
 @nb.njit()
 def compute_pointwise_neighbors(
-        in_times: IntArray,
-        in_coords: IntArray,
-        out_times: IntArray,
-        out_coords: IntArray,
-        spatial_buffer_size: int,
-        event_duration: Optional[int] = None,
+    in_times: IntArray,
+    in_coords: IntArray,
+    out_times: IntArray,
+    out_coords: IntArray,
+    spatial_buffer_size: int,
+    event_duration: Optional[int] = None,
 ) -> Tuple[IntArray, IntArray]:
     """Pointwise optimization of compute_neighbors."""
-    assert (in_times.ndim == 1)
-    assert (in_coords.ndim == 1)
-    assert (out_times.ndim == 1)
-    assert (out_coords.ndim == 1)
-    assert (in_times.size == in_coords.size)
-    assert (out_times.size == out_coords.size)
+    assert in_times.ndim == 1
+    assert in_coords.ndim == 1
+    assert out_times.ndim == 1
+    assert out_coords.ndim == 1
+    assert in_times.size == in_coords.size
+    assert out_times.size == out_coords.size
 
     dtype = in_times.dtype
 
@@ -191,9 +193,12 @@ def compute_pointwise_neighbors(
             while jt <= ot:
                 # push right
                 coord = in_coords[j]
-                buffer.push_right(j, buffer_values[coord],
-                                  buffer_start_stops[coord],
-                                  spatial_buffer_size)
+                buffer.push_right(
+                    j,
+                    buffer_values[coord],
+                    buffer_start_stops[coord],
+                    spatial_buffer_size,
+                )
                 j += 1
                 if j == num_in_events:
                     break
@@ -228,15 +233,15 @@ def compute_pointwise_neighbors(
 
 @nb.njit()
 def compute_neighbors(
-        in_times: IntArray,
-        in_coords: IntArray,
-        out_times: IntArray,
-        out_coords: IntArray,
-        grid_partitions: IntArray,
-        grid_indices: IntArray,
-        grid_splits: IntArray,
-        spatial_buffer_size: int,
-        event_duration: Optional[int] = None,
+    in_times: IntArray,
+    in_coords: IntArray,
+    out_times: IntArray,
+    out_coords: IntArray,
+    grid_partitions: IntArray,
+    grid_indices: IntArray,
+    grid_splits: IntArray,
+    spatial_buffer_size: int,
+    event_duration: Optional[int] = None,
 ) -> Tuple[IntArray, IntArray, IntArray]:
     """
     Compute neighboring indices for flattened events.
@@ -263,15 +268,15 @@ def compute_neighbors(
         event_splits: [out_events + 1] array of row_splits for index_values.
             splits[-1] == num_neighbors
     """
-    assert (in_times.ndim == 1)
-    assert (in_coords.ndim == 1)
-    assert (out_times.ndim == 1)
-    assert (out_coords.ndim == 1)
-    assert (grid_indices.ndim == 1)
-    assert (grid_partitions.ndim == 1)
-    assert (grid_splits.ndim == 1)
-    assert (in_times.size == in_coords.size)
-    assert (out_times.size == out_coords.size)
+    assert in_times.ndim == 1
+    assert in_coords.ndim == 1
+    assert out_times.ndim == 1
+    assert out_coords.ndim == 1
+    assert grid_indices.ndim == 1
+    assert grid_partitions.ndim == 1
+    assert grid_splits.ndim == 1
+    assert in_times.size == in_coords.size
+    assert out_times.size == out_coords.size
 
     num_out_events = out_times.size
     num_in_events = in_times.size
@@ -321,9 +326,12 @@ def compute_neighbors(
             while jt <= ot:
                 # push right
                 coord = in_coords[j]
-                buffer.push_right(j, buffer_values[coord],
-                                  buffer_start_stops[coord],
-                                  spatial_buffer_size)
+                buffer.push_right(
+                    j,
+                    buffer_values[coord],
+                    buffer_start_stops[coord],
+                    spatial_buffer_size,
+                )
                 j += 1
                 if j == num_in_events:
                     break
@@ -362,11 +370,11 @@ def compute_neighbors(
     return partitions[:ii], indices[:ii], index_splits
 
 
-@nb.njit(inline='always')
+@nb.njit(inline="always")
 def reindex_index(mask: BoolArray) -> IntArray:
     return np.cumsum(mask) - 1
 
 
-@nb.njit(inline='always')
+@nb.njit(inline="always")
 def reindex(original_indices: IntArray, reindex_index: IntArray) -> IntArray:
     return reindex_index[original_indices]

@@ -1,4 +1,4 @@
-raise NotImplementedError('deprecated')
+raise NotImplementedError("deprecated")
 # from typing import NamedTuple
 # import tensorflow as tf
 # import ecn.np_utils.preprocess as _pp

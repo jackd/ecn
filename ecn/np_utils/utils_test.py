@@ -1,10 +1,11 @@
 import unittest
+
 import numpy as np
+
 import ecn.np_utils.utils as utils
 
 
 class UtilsTest(unittest.TestCase):
-
     def test_max_on_axis(self):
         np.random.seed(123)
         n = 100
@@ -43,6 +44,7 @@ class UtilsTest(unittest.TestCase):
 
     def test_iter_product(self):
         from itertools import product
+
         iterables = np.arange(3), np.arange(5)
         actual = list(utils.iter_product(*iterables))
         expected = list(product(*iterables))
@@ -50,8 +52,9 @@ class UtilsTest(unittest.TestCase):
 
     def test_iter_product_array(self):
         iterables = np.arange(3), np.arange(5)
-        expected = np.stack(np.meshgrid(*iterables, indexing='ij'),
-                            axis=-1).reshape((-1, 2))
+        expected = np.stack(np.meshgrid(*iterables, indexing="ij"), axis=-1).reshape(
+            (-1, 2)
+        )
         actual = utils.iter_product_array(np.arange(3), np.arange(5))
         np.testing.assert_allclose(actual, expected)
 
@@ -64,8 +67,8 @@ class UtilsTest(unittest.TestCase):
         actual_t, actual_c = utils.merge(t0, c0, t1, c1)
         np.testing.assert_equal(actual_t, [0, 1, 2, 5, 6, 10, 12, 15, 20])
         np.testing.assert_equal(
-            actual_c,
-            np.expand_dims([0, -1, -2, 10, -6, 20, -12, 30, 40], axis=-1))
+            actual_c, np.expand_dims([0, -1, -2, 10, -6, 20, -12, 30, 40], axis=-1)
+        )
 
     def test_prod(self):
         x = np.random.uniform(size=(10,))
@@ -74,6 +77,6 @@ class UtilsTest(unittest.TestCase):
         np.testing.assert_equal(np.prod(x), utils.prod(x))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # NeighborsTest().test_ravel_multi_index()
     unittest.main()

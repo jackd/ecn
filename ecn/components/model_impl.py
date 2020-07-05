@@ -1,19 +1,17 @@
-from typing import Tuple, Optional, Union, TypeVar, Generic, Dict
+from typing import Dict, Generic, Optional, Tuple, TypeVar, Union
+
 import numpy as np
 import tensorflow as tf
 
-from kblocks.ops.ragged import pre_batch_ragged, post_batch_ragged
-from kblocks.ops import sparse as sparse_ops
-
-from kblocks.ops import repeat as tf_repeat
-
-from ecn.layers import spike as spike_layers
-from ecn.layers import neighbors as neigh_layers
-from ecn.layers import conv as conv_layers
-
-from ecn.ops import ragged as ragged_ops
-from ecn.ops import grid as grid_ops
 from ecn import multi_graph as mg
+from ecn.layers import conv as conv_layers
+from ecn.layers import neighbors as neigh_layers
+from ecn.layers import spike as spike_layers
+from ecn.ops import grid as grid_ops
+from ecn.ops import ragged as ragged_ops
+from kblocks.ops import repeat as tf_repeat
+from kblocks.ops import sparse as sparse_ops
+from kblocks.ops.ragged import post_batch_ragged, pre_batch_ragged
 
 BoolTensor = tf.Tensor
 IntTensor = tf.Tensor
@@ -30,19 +28,18 @@ Lambda = tf.keras.layers.Lambda
 #         raise Exception()
 #     return layer
 
-T = TypeVar('T')
+T = TypeVar("T")
 
-S0 = TypeVar('S', bound='Stream')
-S1 = TypeVar('S', bound='Stream')
+S0 = TypeVar("S", bound="Stream")
+S1 = TypeVar("S", bound="Stream")
 
 
 def maybe_pad(values, diff):
-    return tf.cond(diff > 0, lambda: tf.pad(values, [[0, diff]]),
-                   lambda: values)
+    return tf.cond(diff > 0, lambda: tf.pad(values, [[0, diff]]), lambda: values)
 
 
 def maybe_pad_ragged(rt, valid_size, batched_size):
-    assert (rt.ragged_rank == 1)
+    assert rt.ragged_rank == 1
     flat_values = rt.values
     diff = batched_size - valid_size
 
@@ -55,16 +52,12 @@ def maybe_pad_ragged(rt, valid_size, batched_size):
         return rt.flat_values, rt.row_splits
 
     flat_values, row_splits = tf.cond(diff > 0, if_true, if_false)
-    return tf.RaggedTensor.from_row_splits(flat_values,
-                                           row_splits,
-                                           validate=False)
+    return tf.RaggedTensor.from_row_splits(flat_values, row_splits, validate=False)
 
 
 class Grid(object):
-
     def __init__(self, shape):
-        self._static_shape = (None
-                              if isinstance(shape, tf.Tensor) else tuple(shape))
+        self._static_shape = None if isinstance(shape, tf.Tensor) else tuple(shape)
         with mg.pre_batch_context():
             self._shape = tf.convert_to_tensor(shape, dtype=tf.int64)
         self._shape.shape.assert_has_rank(1)
@@ -81,44 +74,63 @@ class Grid(object):
     def ndims(self) -> int:
         return len(self._shape)
 
-    def link(self, kernel_shape: Tuple[int, ...], strides,
-             padding) -> 'GridNeighbors':
+    def link(self, kernel_shape: Tuple[int, ...], strides, padding) -> "GridNeighbors":
         # calculate the transpose and return it's transpose
         with mg.pre_batch_context():
             shape = self.static_shape or self.shape
-            (partitions, indices, splits,
-             out_shape) = grid_ops.sparse_neighborhood(shape, kernel_shape,
-                                                       strides, padding)
-            if not any(
-                    isinstance(t, tf.Tensor)
-                    for t in (strides, padding,
-                              kernel_shape)) and self.static_shape is not None:
-                out_shape = grid_ops.output_shape(np.array(self.static_shape),
-                                                  np.array(kernel_shape),
-                                                  np.array(strides),
-                                                  np.array(padding))
+            (partitions, indices, splits, out_shape) = grid_ops.sparse_neighborhood(
+                shape, kernel_shape, strides, padding
+            )
+            if (
+                not any(
+                    isinstance(t, tf.Tensor) for t in (strides, padding, kernel_shape)
+                )
+                and self.static_shape is not None
+            ):
+                out_shape = grid_ops.output_shape(
+                    np.array(self.static_shape),
+                    np.array(kernel_shape),
+                    np.array(strides),
+                    np.array(padding),
+                )
 
             out_grid = Grid(out_shape)
-            return GridNeighbors(out_grid, self, indices, splits, partitions,
-                                 np.prod(kernel_shape, dtype=np.int64)).T
+            return GridNeighbors(
+                out_grid,
+                self,
+                indices,
+                splits,
+                partitions,
+                np.prod(kernel_shape, dtype=np.int64),
+            ).T
 
-    def self_link(self, kernel_shape: Tuple[int, ...]) -> 'GridNeighbors':
+    def self_link(self, kernel_shape: Tuple[int, ...]) -> "GridNeighbors":
         with mg.pre_batch_context():
             partitions, indices, splits = grid_ops.sparse_neighborhood_in_place(
-                self.shape, kernel_shape)
-            link = GridNeighbors(self, self, indices, splits, partitions,
-                                 np.prod(kernel_shape, dtype=np.int64))
+                self.shape, kernel_shape
+            )
+            link = GridNeighbors(
+                self,
+                self,
+                indices,
+                splits,
+                partitions,
+                np.prod(kernel_shape, dtype=np.int64),
+            )
             link._transpose = link
         return link
 
-    def partial_self_link(self, kernel_mask: BoolArray) -> 'GridNeighbors':
+    def partial_self_link(self, kernel_mask: BoolArray) -> "GridNeighbors":
         with mg.pre_batch_context():
             num_partitions = np.count_nonzero(kernel_mask)
-            (partitions, indices,
-             splits) = grid_ops.sparse_neighborhood_from_mask_in_place(
-                 self.shape, kernel_mask)
-            link = GridNeighbors(self, self, indices, splits, partitions,
-                                 num_partitions)
+            (
+                partitions,
+                indices,
+                splits,
+            ) = grid_ops.sparse_neighborhood_from_mask_in_place(self.shape, kernel_mask)
+            link = GridNeighbors(
+                self, self, indices, splits, partitions, num_partitions
+            )
             link._transpose = link
             return link
 
@@ -139,8 +151,15 @@ class Grid(object):
 class GridNeighbors(object):
     """Contains sparse connectedness information between two grids."""
 
-    def __init__(self, in_grid: Grid, out_grid: Grid, indices: IntTensor,
-                 splits: IntTensor, partitions: IntTensor, num_partitions: int):
+    def __init__(
+        self,
+        in_grid: Grid,
+        out_grid: Grid,
+        indices: IntTensor,
+        splits: IntTensor,
+        partitions: IntTensor,
+        num_partitions: int,
+    ):
         self._in_grid = in_grid
         self._partitions = partitions
         self._indices = indices
@@ -154,15 +173,21 @@ class GridNeighbors(object):
         return self._num_partitions
 
     @property
-    def transpose(self) -> 'GridNeighbors':
+    def transpose(self) -> "GridNeighbors":
         if self._transpose is None:
             # create transpose
             with mg.pre_batch_context():
                 indices, splits, partitions = ragged_ops.transpose_csr(
-                    self.indices, self.splits, self.partitions)
-                self._transpose = GridNeighbors(self._out_grid, self._in_grid,
-                                                indices, splits, partitions,
-                                                self.num_partitions)
+                    self.indices, self.splits, self.partitions
+                )
+                self._transpose = GridNeighbors(
+                    self._out_grid,
+                    self._in_grid,
+                    indices,
+                    splits,
+                    partitions,
+                    self.num_partitions,
+                )
                 self._transpose._transpose = self
         return self._transpose
 
@@ -192,14 +217,14 @@ class GridNeighbors(object):
 
 
 class Stream(object):
-
     def __init__(self, times: IntTensor, min_mean_size: Optional[int] = None):
         mg.assert_is_pre_batch(times)
         self._min_mean_size = min_mean_size
         self._times = times
         with mg.pre_batch_context():
-            self._example_size = Lambda(
-                tf.size, arguments=dict(out_type=tf.int64))(times)
+            self._example_size = Lambda(tf.size, arguments=dict(out_type=tf.int64))(
+                times
+            )
         self._batched = False
         self._valid_size = None
         self._model_row_ends = None
@@ -234,9 +259,13 @@ class Stream(object):
 
         with mg.post_batch_context():
             self._row_lengths = mg.batch(self._example_size)
-            (self._row_splits, self._row_starts, self._row_ends,
-             self._batch_size,
-             self._valid_size) = Lambda(post_batch_fn)(self._row_lengths)
+            (
+                self._row_splits,
+                self._row_starts,
+                self._row_ends,
+                self._batch_size,
+                self._valid_size,
+            ) = Lambda(post_batch_fn)(self._row_lengths)
             if self.min_mean_size is None:
                 self._batched_size = self._valid_size
                 self._diff = None
@@ -281,27 +310,28 @@ class Stream(object):
         with mg.pre_batch_context():
             features = Lambda(pre_batch_ragged)(features)
         with mg.post_batch_context():
-            features = Lambda(post_batch_ragged,
-                              arguments=dict(validate=False))(
-                                  mg.batch(features))
+            features = Lambda(post_batch_ragged, arguments=dict(validate=False))(
+                mg.batch(features)
+            )
             if self._min_mean_size is not None:
                 features = Lambda(lambda args: maybe_pad_ragged(*args))(
-                    [features, self.valid_size, self.batched_size])
+                    [features, self.valid_size, self.batched_size]
+                )
         features = mg.model_input(features)
         return features
 
     def prepare_labels(self, labels) -> Dict[str, tf.Tensor]:
         mg.assert_is_pre_batch(labels)
         labels = mg.batch(labels)
-        ret = {'final': labels}
+        ret = {"final": labels}
         with mg.post_batch_context():
             row_lengths = self.row_lengths
             labels = Lambda(lambda args: tf_repeat(*args, axis=0))(
-                [labels, row_lengths])
+                [labels, row_lengths]
+            )
             if self._min_mean_size is not None:
-                labels = Lambda(lambda args: maybe_pad(*args))(
-                    [labels, self._diff])
-            ret['stream'] = labels
+                labels = Lambda(lambda args: maybe_pad(*args))([labels, self._diff])
+            ret["stream"] = labels
         return ret
 
     def prepare_weights(self, weights=None) -> Dict[str, tf.Tensor]:
@@ -309,7 +339,7 @@ class Stream(object):
         if weights is not None:
             mg.assert_is_pre_batch(weights)
             weights = mg.batch(weights)
-            ret['final'] = weights
+            ret["final"] = weights
         else:
             weights = 1
         with mg.post_batch_context():
@@ -317,9 +347,8 @@ class Stream(object):
             weights = weights / (self._batch_size * row_lengths)
             weights = tf_repeat(weights, row_lengths, axis=0)
             if self._min_mean_size is not None:
-                weights = Lambda(lambda args: maybe_pad(*args))(
-                    [weights, self._diff])
-            ret['stream'] = weights
+                weights = Lambda(lambda args: maybe_pad(*args))([weights, self._diff])
+            ret["stream"] = weights
         return ret
 
     @property
@@ -340,25 +369,26 @@ class Stream(object):
         config.update(kwargs)
         return self.__class__.from_config(config)
 
-    def mask(self, mask: BoolTensor) -> 'Stream':
+    def mask(self, mask: BoolTensor) -> "Stream":
         mg.assert_is_pre_batch(mask)
         with mg.pre_batch_context():
             return self._rebuild(times=tf.boolean_mask(self.times, mask))
 
-    def gather(self, indices: IntTensor) -> 'Stream':
+    def gather(self, indices: IntTensor) -> "Stream":
         mg.assert_is_pre_batch(indices)
         with mg.pre_batch_context():
             return self._rebuild(times=tf.gather(self.times, indices))
 
 
 class SpatialStream(Stream):
-
-    def __init__(self,
-                 grid: Union[Grid, IntTensor, IntArray, Tuple[int, ...]],
-                 times: IntTensor,
-                 coords: IntTensor,
-                 min_mean_size: Optional[int] = None):
-        assert (times.shape.ndims == 1)
+    def __init__(
+        self,
+        grid: Union[Grid, IntTensor, IntArray, Tuple[int, ...]],
+        times: IntTensor,
+        coords: IntTensor,
+        min_mean_size: Optional[int] = None,
+    ):
+        assert times.shape.ndims == 1
         for t in (times, coords):
             mg.assert_is_pre_batch(t)
 
@@ -371,8 +401,7 @@ class SpatialStream(Stream):
             self._shaped_coords = coords
             self._coords = self._grid.ravel_indices(coords)
         else:
-            raise ValueError('coords must be rank 1 or 2, got {}'.format(
-                coords.shape))
+            raise ValueError("coords must be rank 1 or 2, got {}".format(coords.shape))
 
         super().__init__(times=times, min_mean_size=min_mean_size)
 
@@ -399,28 +428,38 @@ class SpatialStream(Stream):
         config.update(dict(coords=self.coords, grid=self.grid))
         return config
 
-    def mask(self, mask: BoolTensor) -> 'SpatialStream':
+    def mask(self, mask: BoolTensor) -> "SpatialStream":
         mg.assert_is_pre_batch(mask)
         with mg.pre_batch_context():
-            return self._rebuild(times=tf.boolean_mask(self.times, mask),
-                                 coords=tf.boolean_mask(self.coords, mask))
+            return self._rebuild(
+                times=tf.boolean_mask(self.times, mask),
+                coords=tf.boolean_mask(self.coords, mask),
+            )
 
-    def gather(self, indices: IntTensor) -> 'SpatialStream':
+    def gather(self, indices: IntTensor) -> "SpatialStream":
         mg.assert_is_pre_batch(indices)
         with mg.pre_batch_context():
-            return self._rebuild(times=tf.gather(self.times, indices),
-                                 coords=tf.gather(self.coords, indices))
+            return self._rebuild(
+                times=tf.gather(self.times, indices),
+                coords=tf.gather(self.coords, indices),
+            )
 
 
 class Convolver(Generic[S0, S1]):
-
-    def __init__(self, in_stream: S0, out_stream: S1,
-                 partitions: Optional[IntTensor], indices: IntTensor,
-                 splits: IntTensor, decay_time: int, num_partitions: int):
+    def __init__(
+        self,
+        in_stream: S0,
+        out_stream: S1,
+        partitions: Optional[IntTensor],
+        indices: IntTensor,
+        splits: IntTensor,
+        decay_time: int,
+        num_partitions: int,
+    ):
         for t in indices, splits:
             mg.assert_is_pre_batch(t)
         if partitions is None:
-            assert (num_partitions == 1)
+            assert num_partitions == 1
         else:
             mg.assert_is_pre_batch(partitions)
         self._decay_time = decay_time
@@ -434,7 +473,7 @@ class Convolver(Generic[S0, S1]):
         self._batched_dts = None
         self._model_dts = None
 
-    def _rebuild(self, **kwargs) -> 'Convolver':
+    def _rebuild(self, **kwargs) -> "Convolver":
         params = dict(
             num_partitions=self._num_partitions,
             in_stream=self.in_stream,
@@ -447,13 +486,14 @@ class Convolver(Generic[S0, S1]):
         params.update(kwargs)
         return Convolver(**params)
 
-    def reindex(self, indices: IntTensor) -> 'Convolver':
+    def reindex(self, indices: IntTensor) -> "Convolver":
         mg.assert_is_pre_batch(indices)
         with mg.pre_batch_context():
-            return self._rebuild(indices=Lambda(lambda args: tf.gather(*args))
-                                 ([indices, self.indices]))
+            return self._rebuild(
+                indices=Lambda(lambda args: tf.gather(*args))([indices, self.indices])
+            )
 
-    def gather(self, indices: IntTensor) -> 'Convolver':
+    def gather(self, indices: IntTensor) -> "Convolver":
         mg.assert_is_pre_batch(indices)
 
         def pre_batch_fn(args):
@@ -465,11 +505,10 @@ class Convolver(Generic[S0, S1]):
 
         with mg.pre_batch_context():
             partitions, indices, splits = Lambda(pre_batch_fn)(
-                [self._partitions, self._indices, self._splits, indices])
+                [self._partitions, self._indices, self._splits, indices]
+            )
 
-        return self._rebuild(partitions=partitions,
-                             indices=indices,
-                             splits=splits)
+        return self._rebuild(partitions=partitions, indices=indices, splits=splits)
 
     @property
     def partitions(self) -> IntTensor:
@@ -515,16 +554,18 @@ class Convolver(Generic[S0, S1]):
         return self._batched_dts
 
     def _batch_single_partition(self):
-
         def pre_batch_fn(args):
             # inside a lambda call
             splits, indices, in_times, out_times = args
             rowids = ragged_ops.splits_to_ids(splits)
-            dt = tf.cast(
-                tf.gather(out_times, rowids) - tf.gather(in_times, indices),
-                tf.float32) / self.decay_time
-            dt = tf.SparseTensor(tf.stack((rowids, indices), axis=-1), dt,
-                                 (-1, -1))
+            dt = (
+                tf.cast(
+                    tf.gather(out_times, rowids) - tf.gather(in_times, indices),
+                    tf.float32,
+                )
+                / self.decay_time
+            )
+            dt = tf.SparseTensor(tf.stack((rowids, indices), axis=-1), dt, (-1, -1))
             return dt
 
         def post_batch_fn(args):
@@ -539,30 +580,36 @@ class Convolver(Generic[S0, S1]):
             i = i + tf.gather(out_row_starts, b)
             j = j + tf.gather(in_row_starts, b)
 
-            batched_dt = tf.SparseTensor(tf.stack((b, i, j), axis=-1),
-                                         tf.identity(dt.values), dense_shape)
+            batched_dt = tf.SparseTensor(
+                tf.stack((b, i, j), axis=-1), tf.identity(dt.values), dense_shape
+            )
             return batched_dt
 
-        assert (self.num_partitions == 1)
+        assert self.num_partitions == 1
         in_stream = self._in_stream
         out_stream = self._out_stream
         with mg.pre_batch_context():
-            dt = Lambda(pre_batch_fn)([
-                self._splits, self._indices, in_stream.times, out_stream.times
-            ])
+            dt = Lambda(pre_batch_fn)(
+                [self._splits, self._indices, in_stream.times, out_stream.times]
+            )
 
         with mg.post_batch_context():
-            dt = Lambda(post_batch_fn)([
-                mg.batch(dt), in_stream.batched_size, out_stream.batched_size,
-                in_stream.row_starts, out_stream.row_starts
-            ])
+            dt = Lambda(post_batch_fn)(
+                [
+                    mg.batch(dt),
+                    in_stream.batched_size,
+                    out_stream.batched_size,
+                    in_stream.row_starts,
+                    out_stream.row_starts,
+                ]
+            )
             return (dt,)
 
     def _batch_multi_partition(self):
         num_partitions = self.num_partitions
 
-        assert (num_partitions > 1)
-        assert (not self.batched)
+        assert num_partitions > 1
+        assert not self.batched
         in_stream = self._in_stream
         out_stream = self._out_stream
 
@@ -570,10 +617,12 @@ class Convolver(Generic[S0, S1]):
             indices, splits, partitions, in_times, out_times = args
             rowids = ragged_ops.splits_to_ids(splits)
             # don't divide dt here so we can stack later before partitioning
-            dt = (tf.gather(out_times, rowids) - tf.gather(in_times, indices))
+            dt = tf.gather(out_times, rowids) - tf.gather(in_times, indices)
             dt = tf.SparseTensor(
-                tf.stack((rowids, indices, partitions), axis=-1), dt,
-                (-1, -1, num_partitions))
+                tf.stack((rowids, indices, partitions), axis=-1),
+                dt,
+                (-1, -1, num_partitions),
+            )
             return dt
 
         def post_batch_fn(args):
@@ -589,61 +638,75 @@ class Convolver(Generic[S0, S1]):
             # partition
             bijt = tf.dynamic_partition(
                 tf.stack((b, i, j, tf.identity(dt.values)), axis=-1),
-                tf.cast(p, tf.int32), num_partitions)
+                tf.cast(p, tf.int32),
+                num_partitions,
+            )
             dense_shape = tf.stack((batch_size, out_size, in_size), axis=0)
             batched_dts = []
             del dt
             for partitioned in bijt:
                 bij, dt = tf.split(partitioned, [3, 1], axis=-1)
-                dt = tf.cast(tf.squeeze(dt, axis=-1),
-                             tf.float32) / self._decay_time
+                dt = tf.cast(tf.squeeze(dt, axis=-1), tf.float32) / self._decay_time
                 batched_dts.append(tf.SparseTensor(bij, dt, dense_shape))
             return tuple(batched_dts)
 
         with mg.pre_batch_context():
-            dt = Lambda(pre_batch_fn)([
-                self._splits, self._indices, self._partitions, in_stream.times,
-                out_stream.times
-            ])
+            dt = Lambda(pre_batch_fn)(
+                [
+                    self._splits,
+                    self._indices,
+                    self._partitions,
+                    in_stream.times,
+                    out_stream.times,
+                ]
+            )
 
         with mg.post_batch_context():
-            return Lambda(post_batch_fn)([
-                mg.batch(dt), in_stream.batched_size, out_stream.batched_size,
-                in_stream.row_starts, out_stream.row_starts
-            ])
+            return Lambda(post_batch_fn)(
+                [
+                    mg.batch(dt),
+                    in_stream.batched_size,
+                    out_stream.batched_size,
+                    in_stream.row_starts,
+                    out_stream.row_starts,
+                ]
+            )
 
     @property
     def model_dts(self):
         if self._model_dts is None:
-            self._model_dts = Lambda(lambda args: tuple(
-                sparse_ops.remove_leading_dim(a) for a in args))(
-                    [mg.model_input(dt) for dt in self.batched_dts])
+            self._model_dts = Lambda(
+                lambda args: tuple(sparse_ops.remove_leading_dim(a) for a in args)
+            )([mg.model_input(dt) for dt in self.batched_dts])
         return self._model_dts
 
-    def convolve(self, features: FloatTensor, filters: int,
-                 temporal_kernel_size: int, **kwargs):
+    def convolve(
+        self, features: FloatTensor, filters: int, temporal_kernel_size: int, **kwargs
+    ):
         mg.assert_is_model_tensor(features)
         if self.num_partitions == 1:
             layer = conv_layers.TemporalEventConv(
-                filters=filters,
-                temporal_kernel_size=temporal_kernel_size,
-                **kwargs)
+                filters=filters, temporal_kernel_size=temporal_kernel_size, **kwargs
+            )
             return layer([features, *self.model_dts])
         else:
             return conv_layers.SpatioTemporalEventConv(
                 filters=filters,
                 temporal_kernel_size=temporal_kernel_size,
                 spatial_kernel_size=self.num_partitions,
-                **kwargs)([features, *self.model_dts])
+                **kwargs
+            )([features, *self.model_dts])
 
 
-def spike_threshold(stream: SpatialStream,
-                    link: GridNeighbors,
-                    decay_time: int,
-                    threshold: float = 1.,
-                    reset_potential: float = -1.,
-                    min_mean_size: Optional[int] = None) -> SpatialStream:
-    assert (stream.grid == link.in_grid)
+def spike_threshold(
+    stream: SpatialStream,
+    link: GridNeighbors,
+    decay_time: int,
+    threshold: float = 1.0,
+    reset_potential: float = -1.0,
+    min_mean_size: Optional[int] = None,
+) -> SpatialStream:
+    assert stream.grid == link.in_grid
     with mg.pre_batch_context():
         times, coords = spike_layers.spike_threshold(
             stream.times,
@@ -652,43 +715,51 @@ def spike_threshold(stream: SpatialStream,
             link.splits,
             decay_time=decay_time,
             threshold=threshold,
-            reset_potential=reset_potential)
-    return SpatialStream(link.out_grid,
-                         times,
-                         coords,
-                         min_mean_size=min_mean_size)
+            reset_potential=reset_potential,
+        )
+    return SpatialStream(link.out_grid, times, coords, min_mean_size=min_mean_size)
 
 
-def global_spike_threshold(stream: Stream,
-                           decay_time: int,
-                           threshold: float = 1.,
-                           reset_potential: float = -1,
-                           min_mean_size: Optional[int] = None) -> Stream:
+def global_spike_threshold(
+    stream: Stream,
+    decay_time: int,
+    threshold: float = 1.0,
+    reset_potential: float = -1,
+    min_mean_size: Optional[int] = None,
+) -> Stream:
     with mg.pre_batch_context():
         time = spike_layers.global_spike_threshold(
             stream.times,
             decay_time=decay_time,
             threshold=threshold,
-            reset_potential=reset_potential)
+            reset_potential=reset_potential,
+        )
     return Stream(time, min_mean_size=min_mean_size)
 
 
-def spatio_temporal_convolver(grid_neighbors: GridNeighbors,
-                              in_stream: SpatialStream,
-                              out_stream: SpatialStream,
-                              decay_time: int,
-                              spatial_buffer_size: int,
-                              max_decays: int = 4
-                             ) -> Convolver[SpatialStream, SpatialStream]:
-    assert (grid_neighbors.in_grid == in_stream.grid)
-    assert (grid_neighbors.out_grid == out_stream.grid)
+def spatio_temporal_convolver(
+    grid_neighbors: GridNeighbors,
+    in_stream: SpatialStream,
+    out_stream: SpatialStream,
+    decay_time: int,
+    spatial_buffer_size: int,
+    max_decays: int = 4,
+) -> Convolver[SpatialStream, SpatialStream]:
+    assert grid_neighbors.in_grid == in_stream.grid
+    assert grid_neighbors.out_grid == out_stream.grid
     grid_neighbors = grid_neighbors.T
     with mg.pre_batch_context():
         partitions, indices, splits = neigh_layers.compute_neighbors(
-            in_stream.times, in_stream.coords, out_stream.times,
-            out_stream.coords, grid_neighbors.partitions,
-            grid_neighbors.indices, grid_neighbors.splits, spatial_buffer_size,
-            decay_time * max_decays)
+            in_stream.times,
+            in_stream.coords,
+            out_stream.times,
+            out_stream.coords,
+            grid_neighbors.partitions,
+            grid_neighbors.indices,
+            grid_neighbors.splits,
+            spatial_buffer_size,
+            decay_time * max_decays,
+        )
     return Convolver(
         num_partitions=grid_neighbors.num_partitions,
         in_stream=in_stream,
@@ -700,13 +771,14 @@ def spatio_temporal_convolver(grid_neighbors: GridNeighbors,
     )
 
 
-def pointwise_convolver(in_stream,
-                        out_stream,
-                        decay_time: int,
-                        spatial_buffer_size: int,
-                        max_decays: int = 4
-                       ) -> Convolver[SpatialStream, SpatialStream]:
-    assert (in_stream.grid == out_stream.grid)
+def pointwise_convolver(
+    in_stream,
+    out_stream,
+    decay_time: int,
+    spatial_buffer_size: int,
+    max_decays: int = 4,
+) -> Convolver[SpatialStream, SpatialStream]:
+    assert in_stream.grid == out_stream.grid
     with mg.pre_batch_context():
         indices, splits = neigh_layers.compute_pointwise_neighbors(
             in_stream.times,
@@ -714,29 +786,34 @@ def pointwise_convolver(in_stream,
             out_stream.times,
             out_stream.coords,
             event_duration=decay_time * max_decays,
-            spatial_buffer_size=spatial_buffer_size)
-    return Convolver(num_partitions=1,
-                     in_stream=in_stream,
-                     out_stream=out_stream,
-                     partitions=None,
-                     indices=indices,
-                     splits=splits,
-                     decay_time=decay_time)
+            spatial_buffer_size=spatial_buffer_size,
+        )
+    return Convolver(
+        num_partitions=1,
+        in_stream=in_stream,
+        out_stream=out_stream,
+        partitions=None,
+        indices=indices,
+        splits=splits,
+        decay_time=decay_time,
+    )
 
 
-def flatten_convolver(in_stream: SpatialStream,
-                      out_stream: Stream,
-                      decay_time: int,
-                      max_decays: int = 4,
-                      num_partitions: Optional[int] = None
-                     ) -> Convolver[SpatialStream, Stream]:
-    assert (not isinstance(out_stream, SpatialStream))
+def flatten_convolver(
+    in_stream: SpatialStream,
+    out_stream: Stream,
+    decay_time: int,
+    max_decays: int = 4,
+    num_partitions: Optional[int] = None,
+) -> Convolver[SpatialStream, Stream]:
+    assert not isinstance(out_stream, SpatialStream)
 
     if num_partitions is None:
         if in_stream.grid.static_shape is None:
             raise ValueError(
-                'Either input_stream grid must be static or num_partitions must be '
-                'provided')
+                "Either input_stream grid must be static or num_partitions must be "
+                "provided"
+            )
         num_partitions_ = np.prod(in_stream.grid.static_shape)
     else:
         num_partitions_ = num_partitions
@@ -747,30 +824,32 @@ def flatten_convolver(in_stream: SpatialStream,
             out_times=out_stream.times,
             event_duration=decay_time * max_decays,
         )
-    return Convolver[SpatialStream, Stream](num_partitions=num_partitions_,
-                                            in_stream=in_stream,
-                                            out_stream=out_stream,
-                                            partitions=partitions,
-                                            indices=indices,
-                                            splits=splits,
-                                            decay_time=decay_time)
+    return Convolver[SpatialStream, Stream](
+        num_partitions=num_partitions_,
+        in_stream=in_stream,
+        out_stream=out_stream,
+        partitions=partitions,
+        indices=indices,
+        splits=splits,
+        decay_time=decay_time,
+    )
 
 
-def temporal_convolver(in_stream: Stream,
-                       out_stream: Stream,
-                       decay_time: int,
-                       max_decays: int = 4) -> Convolver[Stream, Stream]:
-    assert (not isinstance(in_stream, SpatialStream))
-    assert (not isinstance(out_stream, SpatialStream))
+def temporal_convolver(
+    in_stream: Stream, out_stream: Stream, decay_time: int, max_decays: int = 4
+) -> Convolver[Stream, Stream]:
+    assert not isinstance(in_stream, SpatialStream)
+    assert not isinstance(out_stream, SpatialStream)
     with mg.pre_batch_context():
         indices, splits = neigh_layers.compute_pooled_neighbors(
-            in_stream.times,
-            out_stream.times,
-            event_duration=max_decays * decay_time)
-    return Convolver(num_partitions=1,
-                     in_stream=in_stream,
-                     out_stream=out_stream,
-                     partitions=None,
-                     indices=indices,
-                     splits=splits,
-                     decay_time=decay_time)
+            in_stream.times, out_stream.times, event_duration=max_decays * decay_time
+        )
+    return Convolver(
+        num_partitions=1,
+        in_stream=in_stream,
+        out_stream=out_stream,
+        partitions=None,
+        indices=indices,
+        splits=splits,
+        decay_time=decay_time,
+    )

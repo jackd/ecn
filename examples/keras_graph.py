@@ -8,4 +8,4 @@ with tf.Graph().as_default() as g:
 
 out = z + 3
 
-print(model([[2.], [3.]]))
+print(model([[2.0], [3.0]]))

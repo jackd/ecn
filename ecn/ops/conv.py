@@ -1,5 +1,7 @@
 from typing import Sequence, Union
+
 import tensorflow as tf
+
 import kblocks.ops.sparse as sparse_ops
 
 BoolTensor = tf.Tensor
@@ -10,29 +12,30 @@ FloatTensor = tf.Tensor
 # EXPERIMENTAL_COMPILE = False
 
 
-def map_reduce_sum(map_fn,
-                   inputs,
-                   out_shape,
-                   out_type,
-                   parallel_iterations=None,
-                   method='unstack'):
-    if method == 'fold':
+def map_reduce_sum(
+    map_fn, inputs, out_shape, out_type, parallel_iterations=None, method="unstack"
+):
+    if method == "fold":
         init = tf.zeros(out_shape, dtype=out_type)
         out = tf.foldl(lambda acc, args: acc + map_fn(args), inputs, init)
-    elif method == 'map':
-        out = tf.reduce_sum(tf.map_fn(map_fn,
-                                      inputs,
-                                      parallel_iterations=parallel_iterations,
-                                      dtype=out_type),
-                            axis=0)
-    elif method == 'vmap':
+    elif method == "map":
+        out = tf.reduce_sum(
+            tf.map_fn(
+                map_fn, inputs, parallel_iterations=parallel_iterations, dtype=out_type
+            ),
+            axis=0,
+        )
+    elif method == "vmap":
         out = tf.reduce_sum(tf.vectorized_map(map_fn, inputs), axis=0)
-    elif method == 'unstack':
+    elif method == "unstack":
         inputs = (tf.unstack(i, axis=0) for i in inputs)
         out = tf.add_n([map_fn(args) for args in zip(*inputs)])
     else:
-        raise ValueError('Invalid method {}: must be one of {}'.format(
-            method, ('fold', 'map', 'vmap', 'unstack')))
+        raise ValueError(
+            "Invalid method {}: must be one of {}".format(
+                method, ("fold", "map", "vmap", "unstack")
+            )
+        )
     return out
 
 
@@ -46,16 +49,15 @@ def as_complex(x):
     elif x.dtype.is_complex:
         return x
     elif isinstance(x, tf.SparseTensor):
-        return tf.SparseTensor(x.indices, as_complex_tensor(x.values),
-                               x.dense_shape)
+        return tf.SparseTensor(x.indices, as_complex_tensor(x.values), x.dense_shape)
     elif isinstance(x, tf.RaggedTensor):
         return tf.ragged.map_flat_values(as_complex_tensor, x)
     else:
-        raise TypeError(f'Unrecognized type for x, {x}')
+        raise TypeError(f"Unrecognized type for x, {x}")
 
 
 def _validate_dtype(x):
-    assert (x.dtype.is_floating or x.dtype.is_complex)
+    assert x.dtype.is_floating or x.dtype.is_complex
 
 
 def complex_split(x):
@@ -66,16 +68,18 @@ def complex_split(x):
         imag = tf.SparseTensor(x.indices, tf.math.imag(x.values), x.dense_shape)
         return real, imag
     elif isinstance(x, tf.RaggedTensor):
-        return (tf.ragged.map_flat_values(tf.math.real, x),
-                tf.ragged.map_flat_values(tf.math.imag, x))
+        return (
+            tf.ragged.map_flat_values(tf.math.real, x),
+            tf.ragged.map_flat_values(tf.math.imag, x),
+        )
     else:
-        raise TypeError(f'Unrecognized tensor type for x, {x}')
+        raise TypeError(f"Unrecognized tensor type for x, {x}")
 
 
 def sparse_dense_matmul(sp_a: tf.SparseTensor, b: tf.Tensor):
     # gradients aren't supported for complex sparse dense multiplication
     if sp_a.dtype.is_complex:
-        assert (b.dtype.is_complex)
+        assert b.dtype.is_complex
         ar, ai = complex_split(sp_a)
         br, bi = complex_split(b)
 
@@ -92,8 +96,9 @@ def sparse_dense_matmul(sp_a: tf.SparseTensor, b: tf.Tensor):
 
 
 # @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
-def featureless_temporal_event_conv(dt: tf.SparseTensor, kernel: FloatTensor,
-                                    decay: FloatTensor) -> FloatTensor:
+def featureless_temporal_event_conv(
+    dt: tf.SparseTensor, kernel: FloatTensor, decay: FloatTensor
+) -> FloatTensor:
     """
     Global event convolution on inputs.
 
@@ -115,21 +120,22 @@ def featureless_temporal_event_conv(dt: tf.SparseTensor, kernel: FloatTensor,
     # arg checking
     # tf.debugging.assert_non_negative(dt.values)
     if decay.dtype.is_complex:
-        assert (kernel.dtype.is_complex)
+        assert kernel.dtype.is_complex
         dt = as_complex(dt)
     kt = decay.shape[0]
-    assert (kt is not None)
+    assert kt is not None
 
     kernel.shape.assert_has_rank(2)
     decay.shape.assert_has_rank(1)
-    assert (kernel.shape[0] == decay.shape[0])
+    assert kernel.shape[0] == decay.shape[0]
 
-    assert (isinstance(dt, tf.SparseTensor))
+    assert isinstance(dt, tf.SparseTensor)
     dt.shape.assert_has_rank(2)
     # tf.debugging.assert_non_negative(
     #     tf.math.real(decay) if decay.dtype.is_complex else decay)
-    values = tf.exp(-tf.expand_dims(decay, axis=0) *
-                    tf.expand_dims(dt.values, axis=-1))  # [E, kt]
+    values = tf.exp(
+        -tf.expand_dims(decay, axis=0) * tf.expand_dims(dt.values, axis=-1)
+    )  # [E, kt]
     i, j = tf.unstack(dt.indices, axis=-1)
     del j
     n_out = dt.dense_shape[0]
@@ -138,11 +144,13 @@ def featureless_temporal_event_conv(dt: tf.SparseTensor, kernel: FloatTensor,
 
 
 # @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
-def binary_temporal_event_conv(features: BoolTensor,
-                               dt: tf.SparseTensor,
-                               kernel: FloatTensor,
-                               decay: FloatTensor,
-                               validate: bool = True) -> FloatTensor:
+def binary_temporal_event_conv(
+    features: BoolTensor,
+    dt: tf.SparseTensor,
+    kernel: FloatTensor,
+    decay: FloatTensor,
+    validate: bool = True,
+) -> FloatTensor:
     """
     Global event convolution on binary inputs.
 
@@ -166,44 +174,48 @@ def binary_temporal_event_conv(features: BoolTensor,
     # arg checking
     # tf.debugging.assert_non_negative(dt.values)
     if decay.dtype.is_complex:
-        assert (kernel.dtype.is_complex)
+        assert kernel.dtype.is_complex
         dt = as_complex(dt)
     features.shape.assert_has_rank(1)
     kt = decay.shape[0]
-    assert (kt is not None)
+    assert kt is not None
 
     if validate:
         n_in = dt.dense_shape[-1]
         tf.assert_equal(
-            tf.shape(features, out_type=getattr(n_in, 'dtype', tf.int64))[0],
-            n_in)
-    assert (features.dtype == tf.bool)
+            tf.shape(features, out_type=getattr(n_in, "dtype", tf.int64))[0], n_in
+        )
+    assert features.dtype == tf.bool
     kernel.shape.assert_has_rank(2)
     decay.shape.assert_has_rank(1)
-    assert (kernel.shape[0] == 2 * decay.shape[0])
+    assert kernel.shape[0] == 2 * decay.shape[0]
 
-    assert (isinstance(dt, tf.SparseTensor))
+    assert isinstance(dt, tf.SparseTensor)
     dt.shape.assert_has_rank(2)
     # tf.debugging.assert_non_negative(
     #     tf.math.real(decay) if decay.dtype.is_complex else decay)
-    values = tf.exp(-tf.expand_dims(decay, axis=0) *
-                    tf.expand_dims(dt.values, axis=-1))  # [E, kt]
+    values = tf.exp(
+        -tf.expand_dims(decay, axis=0) * tf.expand_dims(dt.values, axis=-1)
+    )  # [E, kt]
     i, j = tf.unstack(dt.indices, axis=-1)
     features = tf.gather(features, j)
     segments = i * 2 + tf.cast(features, i.dtype)
     n_out = dt.dense_shape[0]
     # n_out * (2 * tk)
-    row_sum = tf.math.unsorted_segment_sum(values,
-                                           segments,
-                                           num_segments=n_out * 2)
+    row_sum = tf.math.unsorted_segment_sum(values, segments, num_segments=n_out * 2)
     row_sum = tf.reshape(row_sum, (-1, 2 * kt))
     return tf.matmul(row_sum, kernel)
 
 
 # @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
-def temporal_event_pooling(features: FloatTensor, dt: FloatTensor,
-                           value_rowids: IntTensor, batch_size: IntTensor,
-                           kernel: FloatTensor, decay: FloatTensor):
+def temporal_event_pooling(
+    features: FloatTensor,
+    dt: FloatTensor,
+    value_rowids: IntTensor,
+    batch_size: IntTensor,
+    kernel: FloatTensor,
+    decay: FloatTensor,
+):
     """
     Equivalent to temporal_event_conv when there is a single event at the end.
 
@@ -216,21 +228,21 @@ def temporal_event_pooling(features: FloatTensor, dt: FloatTensor,
         decay: [tk]
     """
     features.shape.assert_has_rank(2)
-    assert (features.dtype.is_floating)
+    assert features.dtype.is_floating
     dt.shape.assert_has_rank(1)
-    assert (dt.dtype.is_floating)
+    assert dt.dtype.is_floating
     value_rowids.shape.assert_has_rank(1)
-    assert (value_rowids.dtype.is_integer)
+    assert value_rowids.dtype.is_integer
     kernel.shape.assert_has_rank(3)
     decay.shape.assert_has_rank(1)
     tk, f_in, f_out = kernel.shape
-    assert (decay.shape[0] == tk)
-    assert (features.shape[1] == f_in)
+    assert decay.shape[0] == tk
+    assert features.shape[1] == f_in
 
-    decayed_dt = tf.exp(-tf.expand_dims(decay, axis=0) *
-                        tf.expand_dims(dt, axis=1))  # [E, tk]
-    left = tf.expand_dims(features, axis=1) * tf.expand_dims(decayed_dt,
-                                                             axis=-1)
+    decayed_dt = tf.exp(
+        -tf.expand_dims(decay, axis=0) * tf.expand_dims(dt, axis=1)
+    )  # [E, tk]
+    left = tf.expand_dims(features, axis=1) * tf.expand_dims(decayed_dt, axis=-1)
     # left is now [E, tk, f_in]
     left = tf.math.unsorted_segment_sum(left, value_rowids, batch_size)
     # now [batch_size, tk, f_in]
@@ -240,12 +252,14 @@ def temporal_event_pooling(features: FloatTensor, dt: FloatTensor,
 
 
 # @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
-def temporal_event_conv(features: FloatTensor,
-                        dt: tf.SparseTensor,
-                        kernel: FloatTensor,
-                        decay: FloatTensor,
-                        validate: bool = True,
-                        combine: str = 'unstack') -> FloatTensor:
+def temporal_event_conv(
+    features: FloatTensor,
+    dt: tf.SparseTensor,
+    kernel: FloatTensor,
+    decay: FloatTensor,
+    validate: bool = True,
+    combine: str = "unstack",
+) -> FloatTensor:
     """
     Global event convolution.
 
@@ -270,23 +284,23 @@ def temporal_event_conv(features: FloatTensor,
     # arg checking
     # tf.debugging.assert_non_negative(dt.values)
     if decay.dtype.is_complex:
-        assert (kernel.dtype.is_complex)
+        assert kernel.dtype.is_complex
         dt = as_complex(dt)
         features = as_complex(features)
     features.shape.assert_has_rank(2)
     if validate:
         n_in = dt.dense_shape[-1]
         tf.assert_equal(
-            tf.shape(features, out_type=getattr(n_in, 'dtype', tf.int64))[0],
-            n_in)
+            tf.shape(features, out_type=getattr(n_in, "dtype", tf.int64))[0], n_in
+        )
     if dt.dense_shape.shape[0] == 3:
         # remove batch dim
         dt = sparse_ops.remove_dim(dt, axis=0)
-    assert (dt.dense_shape.shape[0] == 2)
+    assert dt.dense_shape.shape[0] == 2
     kernel.shape.assert_has_rank(3)
-    assert (dt.dense_shape.shape[0] == 2)
-    assert (decay.shape[0] == kernel.shape[0])
-    assert (features.shape[1] == kernel.shape[1])
+    assert dt.dense_shape.shape[0] == 2
+    assert decay.shape[0] == kernel.shape[0]
+    assert features.shape[1] == kernel.shape[1]
     _validate_dtype(dt)
     _validate_dtype(kernel)
     _validate_dtype(decay)
@@ -309,10 +323,9 @@ def temporal_event_conv(features: FloatTensor,
     f_out = kernel.shape[-1]
     n_out = dt.dense_shape[0]
     out_shape = (n_out, f_out)
-    return map_reduce_sum(map_fn, (kernel, sparse_values),
-                          out_shape,
-                          kernel.dtype,
-                          method=combine)
+    return map_reduce_sum(
+        map_fn, (kernel, sparse_values), out_shape, kernel.dtype, method=combine
+    )
 
     # kernel = tf.unstack(kernel, axis=0)
     # sparse_values = tf.unstack(sparse_values, axis=0)
@@ -322,8 +335,10 @@ def temporal_event_conv(features: FloatTensor,
 
 # @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def featureless_spatio_temporal_event_conv(
-        dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]],
-        kernel: FloatTensor, decay: FloatTensor) -> FloatTensor:
+    dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]],
+    kernel: FloatTensor,
+    decay: FloatTensor,
+) -> FloatTensor:
     """
     Event convolution.
 
@@ -344,33 +359,32 @@ def featureless_spatio_temporal_event_conv(
     """
     decay.shape.assert_has_rank(2)
     if decay.dtype.is_complex:
-        assert (kernel.dtype.is_complex)
+        assert kernel.dtype.is_complex
     kernel.shape.assert_has_rank(3)
     _validate_dtype(decay)
     sk = decay.shape[0]
-    assert (sk is not None)
+    assert sk is not None
 
-    assert (kernel.shape[0] == sk)
+    assert kernel.shape[0] == sk
     _validate_dtype(kernel)
-    assert (kernel.shape[0] == decay.shape[0])
-    assert (kernel.shape[1] == decay.shape[1])
+    assert kernel.shape[0] == decay.shape[0]
+    assert kernel.shape[1] == decay.shape[1]
     dt_ = _split_spatial_dt(dt, sk)
 
     # implementation start
     kernel = tf.unstack(kernel, axis=0)
     decay = tf.unstack(decay, axis=0)
-    terms = [
-        featureless_temporal_event_conv(*args)
-        for args in zip(dt_, kernel, decay)
-    ]
+    terms = [featureless_temporal_event_conv(*args) for args in zip(dt_, kernel, decay)]
     return tf.add_n(terms)
 
 
 # @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def binary_spatio_temporal_event_conv(
-        features: BoolTensor,
-        dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]],
-        kernel: FloatTensor, decay: FloatTensor) -> FloatTensor:
+    features: BoolTensor,
+    dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]],
+    kernel: FloatTensor,
+    decay: FloatTensor,
+) -> FloatTensor:
     """
     Event convolution.
 
@@ -393,18 +407,18 @@ def binary_spatio_temporal_event_conv(
     """
     decay.shape.assert_has_rank(2)
     if decay.dtype.is_complex:
-        assert (kernel.dtype.is_complex)
+        assert kernel.dtype.is_complex
     kernel.shape.assert_has_rank(3)
     _validate_dtype(decay)
     sk = decay.shape[0]
-    assert (sk is not None)
+    assert sk is not None
 
-    assert (kernel.shape[0] == sk)
+    assert kernel.shape[0] == sk
     _validate_dtype(kernel)
-    assert (kernel.shape[0] == decay.shape[0])
-    assert (kernel.shape[1] == 2 * decay.shape[1])
+    assert kernel.shape[0] == decay.shape[0]
+    assert kernel.shape[1] == 2 * decay.shape[1]
     features.shape.assert_has_rank(1)
-    assert (features.dtype.is_bool)
+    assert features.dtype.is_bool
 
     dt_ = _split_spatial_dt(dt, sk)
 
@@ -419,11 +433,12 @@ def binary_spatio_temporal_event_conv(
 
 # @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def spatio_temporal_event_conv(
-        features: FloatTensor,
-        dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]],
-        kernel: FloatTensor,
-        decay: FloatTensor,
-        combine: str = 'unstack') -> FloatTensor:
+    features: FloatTensor,
+    dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]],
+    kernel: FloatTensor,
+    decay: FloatTensor,
+    combine: str = "unstack",
+) -> FloatTensor:
     """
     Event convolution.
 
@@ -446,19 +461,19 @@ def spatio_temporal_event_conv(
         [n_out, f_out] output features.
     """
     if decay.dtype.is_complex:
-        assert (kernel.dtype.is_complex)
+        assert kernel.dtype.is_complex
         features = as_complex(features)
     decay.shape.assert_has_rank(2)
     kernel.shape.assert_has_rank(4)
     _validate_dtype(decay)
     sk = decay.shape[0]
-    assert (sk is not None)
+    assert sk is not None
 
-    assert (kernel.shape[0] == sk)
+    assert kernel.shape[0] == sk
     _validate_dtype(kernel)
 
-    assert (kernel.shape[:2] == decay.shape)
-    assert (kernel.shape[-2] == features.shape[-1])
+    assert kernel.shape[:2] == decay.shape
+    assert kernel.shape[-2] == features.shape[-1]
     features.shape.assert_has_rank(2)
 
     dt_ = _split_spatial_dt(dt, sk)
@@ -473,13 +488,12 @@ def spatio_temporal_event_conv(
     return tf.add_n(terms)
 
 
-def _split_spatial_dt(dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]],
-                      sk: int):
+def _split_spatial_dt(dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]], sk: int):
     # arg checking
     if isinstance(dt, tf.SparseTensor):
         # dt.shape.assert_has_rank(3)
         _validate_dtype(dt)
-        shape = getattr(dt, 'shape')
+        shape = getattr(dt, "shape")
         if shape.ndims == 4:
             # remove batch dim
             dt = sparse_ops.remove_leading_dim(dt)
@@ -487,11 +501,11 @@ def _split_spatial_dt(dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]],
             shape.assert_has_rank(3)
         dt_ = sparse_ops.unstack(dt, num_partitions=sk)
     elif isinstance(dt, tf.Tensor):
-        raise ValueError('dense dt not supported')
-    elif hasattr(dt, '__iter__'):
+        raise ValueError("dense dt not supported")
+    elif hasattr(dt, "__iter__"):
         dt_ = []
         for d in dt:
-            assert (isinstance(d, tf.SparseTensor))
+            assert isinstance(d, tf.SparseTensor)
             shape = d.shape
             if shape.ndims == 3:
                 # remove batch dim
@@ -501,5 +515,5 @@ def _split_spatial_dt(dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]],
             _validate_dtype(d)
             dt_.append(d)
     else:
-        raise ValueError('Unrecognized dt type {}'.format(dt))
+        raise ValueError("Unrecognized dt type {}".format(dt))
     return dt_

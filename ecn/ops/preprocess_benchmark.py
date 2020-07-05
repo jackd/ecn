@@ -1,4 +1,4 @@
-raise NotImplementedError('deprecated')
+raise NotImplementedError("deprecated")
 # import functools
 # import tensorflow as tf
 # from ecn.benchmark_utils import benchmark

@@ -1,9 +1,6 @@
 from typing import Callable
-import functools
-import timeit
+
 import tensorflow as tf
-import numpy as np
-import numba
 
 with tf.Graph().as_default() as graph:
     x = tf.range(10, dtype=tf.int64)
@@ -32,26 +29,28 @@ def subgraph(graph_def, inputs, outputs) -> Callable:
     """
     input_op_names = tuple(
         t if isinstance(t, str) else t.op.name
-        for t in tf.nest.flatten(inputs, expand_composites=True))
+        for t in tf.nest.flatten(inputs, expand_composites=True)
+    )
     output_names = tuple(
         t if isinstance(t, str) else t.name
-        for t in tf.nest.flatten(outputs, expand_composites=True))
+        for t in tf.nest.flatten(outputs, expand_composites=True)
+    )
 
     @tf.function()
     def graph_fn(*args, learning_phase=None, **kwargs):
-        assert (len(args) == 0 or len(kwargs) == 0)
+        assert len(args) == 0 or len(kwargs) == 0
         if len(kwargs) == 0:
             if len(args) == 1:
-                args, = args
+                (args,) = args
             tf.nest.assert_same_structure(args, inputs)
         else:
             tf.nest.assert_same_structure(kwargs, inputs)
         input_map = dict(
-            zip(input_op_names,
-                tf.nest.flatten((args, kwargs), expand_composites=True)))
-        out = tf.graph_util.import_graph_def(graph_def,
-                                             input_map=input_map,
-                                             return_elements=output_names)
+            zip(input_op_names, tf.nest.flatten((args, kwargs), expand_composites=True))
+        )
+        out = tf.graph_util.import_graph_def(
+            graph_def, input_map=input_map, return_elements=output_names
+        )
         return out
         # return tf.nest.pack_sequence_as(outputs, out, expand_composites=True)
 

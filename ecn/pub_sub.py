@@ -1,14 +1,13 @@
-from typing import Optional, Callable, Generic, TypeVar, Any
-import contextlib
 import collections
+import contextlib
 import uuid
+from typing import Any, Callable, Generic, Optional, TypeVar
 
-T = TypeVar('T')
-S = TypeVar('S')
+T = TypeVar("T")
+S = TypeVar("S")
 
 
 class Topic(Generic[T]):
-
     def __init__(self):
         self._subscriptions = collections.OrderedDict()
         self._finished = False
@@ -17,11 +16,11 @@ class Topic(Generic[T]):
     def stopped(self):
         return self._finished
 
-    def listen(self,
-               callback: Callable[[T], Any],
-               on_finish: Optional[Callable] = None) -> 'Subscription':
+    def listen(
+        self, callback: Callable[[T], Any], on_finish: Optional[Callable] = None
+    ) -> "Subscription":
         if self._finished:
-            raise RuntimeError('Cannot listen to topic: stopped')
+            raise RuntimeError("Cannot listen to topic: stopped")
         uid = uuid.uuid4()
         while uid in self._subscriptions:
             uid = uuid.uuid4()
@@ -29,8 +28,8 @@ class Topic(Generic[T]):
         self._subscriptions[uid] = sub
         return sub
 
-    def _cancel(self, subscription: 'Subscription'):
-        assert (subscription.topic is self)
+    def _cancel(self, subscription: "Subscription"):
+        assert subscription.topic is self
         del self._subscriptions[subscription.uid]
         subscription.on_cancel()
 
@@ -47,7 +46,6 @@ class Topic(Generic[T]):
 
 
 class Publisher(Generic[T]):
-
     def __init__(self):
         self._topic = Topic[T]()
 
@@ -60,13 +58,14 @@ class Publisher(Generic[T]):
 
 
 class Subscription(object):
-
-    def __init__(self,
-                 topic: Topic[T],
-                 callback: Callable[[T], Any],
-                 uid: uuid.UUID,
-                 on_finish: Optional[Callable[[], Any]] = None,
-                 on_cancel: Optional[Callable[[], Any]] = None):
+    def __init__(
+        self,
+        topic: Topic[T],
+        callback: Callable[[T], Any],
+        uid: uuid.UUID,
+        on_finish: Optional[Callable[[], Any]] = None,
+        on_cancel: Optional[Callable[[], Any]] = None,
+    ):
         self._topic = topic
         self._uid = uid
         self._done = topic.stopped
@@ -90,11 +89,11 @@ class Subscription(object):
         if not self._done:
             self._topic._cancel(self)
         else:
-            raise RuntimeError('Already done')
+            raise RuntimeError("Already done")
 
     def on_cancel(self):
         if self._done:
-            raise RuntimeError('Already done')
+            raise RuntimeError("Already done")
         if self._on_cancel is not None:
             self._on_cancel()
         self.on_finish()
@@ -114,16 +113,16 @@ def accumulator(topic):
     sub.cancel()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     pub = Publisher()
     with accumulator(pub.topic) as accumulated:
-        pub.add('before registering any')
-        a = pub.topic.listen(lambda x: print('from a: {}'.format(x)))
-        pub.add('before registering b')
-        b = pub.topic.listen(lambda x: print('from b: {}'.format(x)))
-        pub.add('after registering b')
+        pub.add("before registering any")
+        a = pub.topic.listen(lambda x: print("from a: {}".format(x)))
+        pub.add("before registering b")
+        b = pub.topic.listen(lambda x: print("from b: {}".format(x)))
+        pub.add("after registering b")
         a.cancel()
-        pub.add('after cancelling a')
+        pub.add("after cancelling a")
         b.cancel()
-        pub.add('after cancelling b')
+        pub.add("after cancelling b")
     print(accumulated)

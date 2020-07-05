@@ -1,7 +1,8 @@
-from typing import Union, Tuple
+from typing import Tuple
+
 import tensorflow as tf
 
-from kblocks.ops.ragged import mask_to_lengths, lengths_to_splits
+from kblocks.ops.ragged import lengths_to_splits, mask_to_lengths
 
 BoolTensor = tf.Tensor
 IntTensor = tf.Tensor
@@ -22,8 +23,8 @@ def ravel_multi_index(indices, dims: tf.Tensor, axis=-1):
         axis += indices.shape.ndims
     if axis < 0:
         raise ValueError(
-            'axis must be positive, but after adding ndim still got {}'.format(
-                axis))
+            "axis must be positive, but after adding ndim still got {}".format(axis)
+        )
 
     dtype = indices.dtype
 
@@ -31,7 +32,7 @@ def ravel_multi_index(indices, dims: tf.Tensor, axis=-1):
     if dims_.shape.ndims == 0:
         ndim = tf.shape(indices, out_type=dtype)[axis]
         # scalar
-        offset = dims_**tf.range(ndim - 1, -1, -1, dtype=dtype)
+        offset = dims_ ** tf.range(ndim - 1, -1, -1, dtype=dtype)
     else:
         offset = tf.math.cumprod(dims_, exclusive=True, reverse=True)
 
@@ -54,9 +55,9 @@ def output_shape(in_shape, kernel_shape, strides, padding):
     return (in_shape + 2 * padding - kernel_shape) // strides + 1
 
 
-def grid_coords(in_shape: IntTensor, kernel_shape: IntTensor,
-                strides: IntTensor,
-                padding: IntTensor) -> Tuple[IntTensor, IntTensor]:
+def grid_coords(
+    in_shape: IntTensor, kernel_shape: IntTensor, strides: IntTensor, padding: IntTensor
+) -> Tuple[IntTensor, IntTensor]:
     in_shape = tf.convert_to_tensor(in_shape, dtype_hint=tf.int64)
     kernel_shape = tf.convert_to_tensor(kernel_shape, dtype_hint=tf.int64)
     strides = tf.convert_to_tensor(strides, dtype_hint=tf.int64)
@@ -78,11 +79,13 @@ def shift_grid_coords(out_coords, kernel_shape, strides, padding):
 def _valid_partitions(coords, offset, in_shape):
     out_size = tf.shape(coords)[0]
     coords = tf.expand_dims(coords, axis=-2) + offset
-    valid = tf.logical_and(tf.reduce_all(coords >= 0, axis=-1),
-                           tf.reduce_all(coords < in_shape, axis=-1))
+    valid = tf.logical_and(
+        tf.reduce_all(coords >= 0, axis=-1), tf.reduce_all(coords < in_shape, axis=-1)
+    )
     num_partitions = tf.shape(offset, out_type=in_shape.dtype)[0]
-    partitions = tf.tile(tf.expand_dims(tf.range(num_partitions), axis=0),
-                         (out_size, 1))
+    partitions = tf.tile(
+        tf.expand_dims(tf.range(num_partitions), axis=0), (out_size, 1)
+    )
 
     splits = lengths_to_splits(mask_to_lengths(valid, dtype=offset.dtype))
     partitions = tf.boolean_mask(partitions, valid)
@@ -91,9 +94,9 @@ def _valid_partitions(coords, offset, in_shape):
     return partitions, coords, splits
 
 
-def sparse_neighborhood(in_shape: IntTensor, kernel_shape: IntTensor,
-                        strides: IntTensor, padding: IntTensor
-                       ) -> Tuple[IntTensor, IntTensor, IntTensor, IntTensor]:
+def sparse_neighborhood(
+    in_shape: IntTensor, kernel_shape: IntTensor, strides: IntTensor, padding: IntTensor
+) -> Tuple[IntTensor, IntTensor, IntTensor, IntTensor]:
     in_shape = tf.convert_to_tensor(in_shape, dtype_hint=tf.int64)
     dtype = in_shape.dtype
     kernel_shape = tf.convert_to_tensor(kernel_shape, dtype=dtype)
@@ -102,7 +105,8 @@ def sparse_neighborhood(in_shape: IntTensor, kernel_shape: IntTensor,
 
     coords, out_shape = grid_coords(in_shape, kernel_shape, strides, padding)
     partitions, coords, splits = _valid_partitions(
-        coords, base_grid_coords(kernel_shape), in_shape)
+        coords, base_grid_coords(kernel_shape), in_shape
+    )
     return partitions, coords, splits, out_shape
 
 
@@ -111,12 +115,14 @@ def sparse_neighborhood_in_place(in_shape, kernel_shape):
     kernel_shape = tf.convert_to_tensor(kernel_shape, dtype_hint=in_shape.dtype)
     coords = base_grid_coords(in_shape) - ((kernel_shape - 1) // 2)
     partitions, coords, splits = _valid_partitions(
-        coords, base_grid_coords(kernel_shape), in_shape)
+        coords, base_grid_coords(kernel_shape), in_shape
+    )
     return partitions, coords, splits
 
 
-def sparse_neighborhood_from_mask(in_shape: IntTensor, kernel_mask: BoolTensor,
-                                  strides: IntTensor, padding: IntTensor):
+def sparse_neighborhood_from_mask(
+    in_shape: IntTensor, kernel_mask: BoolTensor, strides: IntTensor, padding: IntTensor
+):
     in_shape = tf.convert_to_tensor(in_shape, dtype_hint=tf.int64)
     kernel_mask = tf.convert_to_tensor(kernel_mask, dtype_hint=tf.bool)
     strides = tf.convert_to_tensor(strides, dtype_hint=tf.int64)
@@ -125,16 +131,19 @@ def sparse_neighborhood_from_mask(in_shape: IntTensor, kernel_mask: BoolTensor,
     kernel_shape = tf.shape(kernel_mask, out_type=tf.int64)
     coords, out_shape = grid_coords(in_shape, kernel_shape, strides, padding)
     partitions, coords, splits = _valid_partitions(
-        coords, tf.cast(tf.where(kernel_mask), coords.dtype), in_shape)
+        coords, tf.cast(tf.where(kernel_mask), coords.dtype), in_shape
+    )
     return partitions, coords, splits, out_shape
 
 
-def sparse_neighborhood_from_mask_in_place(in_shape: IntTensor,
-                                           kernel_mask: BoolTensor):
+def sparse_neighborhood_from_mask_in_place(
+    in_shape: IntTensor, kernel_mask: BoolTensor
+):
     in_shape = tf.convert_to_tensor(in_shape, dtype_hint=tf.int64)
     kernel_mask = tf.convert_to_tensor(kernel_mask, dtype=tf.bool)
     kernel_shape = tf.shape(kernel_mask, out_type=in_shape.dtype)
     coords = base_grid_coords(in_shape) - ((kernel_shape - 1) // 2)
     partitions, coords, splits = _valid_partitions(
-        coords, tf.cast(tf.where(kernel_mask), coords.dtype), in_shape)
+        coords, tf.cast(tf.where(kernel_mask), coords.dtype), in_shape
+    )
     return partitions, coords, splits

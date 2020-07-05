@@ -1,7 +1,9 @@
 import unittest
+
 import numpy as np
-import ecn.np_utils.ragged as ragged
 from scipy.sparse import coo_matrix
+
+import ecn.np_utils.ragged as ragged
 
 
 def ragged_to_sparse(indices, splits, values, shape):
@@ -11,7 +13,6 @@ def ragged_to_sparse(indices, splits, values, shape):
 
 
 class RaggedTest(unittest.TestCase):
-
     def test_lengths_to_ids(self):
         row_lengths = np.array([2, 3, 5])
         actual = ragged.lengths_to_ids(row_lengths)
@@ -42,7 +43,8 @@ class RaggedTest(unittest.TestCase):
         splits = ragged.ids_to_splits(i)
 
         actual_indices, actual_splits, actual_values = ragged.transpose_csr(
-            j, splits, values)
+            j, splits, values
+        )
         # expected_j = [0, 1, 1, 1, 2, 2, 3, 4]
         expected_splits = [0, 1, 4, 6, 7, 8]
         np.testing.assert_equal(actual_splits, expected_splits)
@@ -80,7 +82,7 @@ class RaggedTest(unittest.TestCase):
         np.testing.assert_allclose(actual, expected)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
     # RaggedTest().test_mask_ragged_rows()
     # RaggedTest().test_transpose_csr()

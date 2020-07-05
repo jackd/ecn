@@ -1,10 +1,11 @@
-from typing import TypeVar, Tuple, Union, Iterable
 import abc
-from kblocks.tf_typing import TensorLike, TensorLikeSpec
-from typing import Callable, Optional
+from typing import Callable, Iterable, Optional, Tuple, TypeVar, Union
+
 import tensorflow as tf
 
-T = TypeVar('T')
+from kblocks.tf_typing import TensorLike, TensorLikeSpec
+
+T = TypeVar("T")
 NameLike = Union[str, tf.Tensor]
 
 
@@ -12,40 +13,46 @@ def _spec_to_placeholder(spec):
     if isinstance(spec, tf.TensorSpec):
         return tf.keras.backend.placeholder(shape=spec.shape, dtype=spec.dtype)
     elif isinstance(spec, tf.SparseTensorSpec):
-        return tf.keras.backend.placeholder(shape=spec.shape,
-                                            dtype=spec.dtype,
-                                            sparse=True)
+        return tf.keras.backend.placeholder(
+            shape=spec.shape, dtype=spec.dtype, sparse=True
+        )
     elif isinstance(spec, tf.RaggedTensorSpec):
-        return tf.keras.backend.placeholder(shape=spec._shape,
-                                            dtype=spec._dtype,
-                                            ragged=True)
+        return tf.keras.backend.placeholder(
+            shape=spec._shape, dtype=spec._dtype, ragged=True
+        )
     else:
         raise TypeError(
-            'Invalid type for spec: must be TensorSpecLike, got {}'.format(
-                spec))
+            "Invalid type for spec: must be TensorSpecLike, got {}".format(spec)
+        )
 
 
 def _spec_to_input(spec):
-    return tf.keras.Input(shape=spec.shape[1:],
-                          batch_size=spec.shape[0],
-                          ragged=isinstance(spec, tf.RaggedTensorSpec),
-                          sparse=isinstance(spec, tf.SparseTensorSpec),
-                          dtype=spec.dtype)
+    return tf.keras.Input(
+        shape=spec.shape[1:],
+        batch_size=spec.shape[0],
+        ragged=isinstance(spec, tf.RaggedTensorSpec),
+        sparse=isinstance(spec, tf.SparseTensorSpec),
+        dtype=spec.dtype,
+    )
 
 
 def _batched_placeholder_like(x, batch_size=None):
     shape = (batch_size, *x.shape)
-    return tf.keras.backend.placeholder(shape=shape,
-                                        dtype=x.dtype,
-                                        sparse=isinstance(x, tf.SparseTensor),
-                                        ragged=isinstance(x, tf.RaggedTensor))
+    return tf.keras.backend.placeholder(
+        shape=shape,
+        dtype=x.dtype,
+        sparse=isinstance(x, tf.SparseTensor),
+        ragged=isinstance(x, tf.RaggedTensor),
+    )
 
 
 def _placeholder_like(x):
-    return tf.keras.backend.placeholder(shape=x.shape,
-                                        dtype=x.dtype,
-                                        sparse=isinstance(x, tf.SparseTensor),
-                                        ragged=isinstance(x, tf.RaggedTensor))
+    return tf.keras.backend.placeholder(
+        shape=x.shape,
+        dtype=x.dtype,
+        sparse=isinstance(x, tf.SparseTensor),
+        ragged=isinstance(x, tf.RaggedTensor),
+    )
 
 
 def flatten_inputs(fn, input_structure, expand_composites=False):
@@ -64,9 +71,9 @@ def flatten_inputs(fn, input_structure, expand_composites=False):
     """
 
     def flat_fn(*inputs):
-        tf.nest.assert_same_structure(inputs,
-                                      input_structure,
-                                      expand_composites=expand_composites)
+        tf.nest.assert_same_structure(
+            inputs, input_structure, expand_composites=expand_composites
+        )
         flat_args = tf.nest.flatten(inputs, expand_composites=expand_composites)
         return fn(*flat_args)
 
@@ -90,9 +97,9 @@ def repack_outputs(fn, output_structure, expand_composites=False):
 
     def flat_fn(*args, **kwargs):
         out = fn(*args, **kwargs)
-        return tf.nest.pack_sequence_as(output_structure,
-                                        out,
-                                        expand_composites=expand_composites)
+        return tf.nest.pack_sequence_as(
+            output_structure, out, expand_composites=expand_composites
+        )
 
     return flat_fn
 
@@ -111,31 +118,31 @@ def subgraph(graph_def, inputs, outputs) -> Callable:
     """
     input_op_names = tuple(
         t if isinstance(t, str) else t.op.name
-        for t in tf.nest.flatten(inputs, expand_composites=True))
+        for t in tf.nest.flatten(inputs, expand_composites=True)
+    )
     output_names = tuple(
         t if isinstance(t, str) else t.name
-        for t in tf.nest.flatten(outputs, expand_composites=True))
+        for t in tf.nest.flatten(outputs, expand_composites=True)
+    )
 
     @tf.function()
     def graph_fn(*args, **kwargs):
         args = tf.nest.flatten((args, kwargs), expand_composites=True)
         if len(args) != len(input_op_names):
             raise ValueError(
-                f'Expected {len(input_op_names)} args, got {len(args)}: {args}')
-        assert (len(args) == len(input_op_names))
+                f"Expected {len(input_op_names)} args, got {len(args)}: {args}"
+            )
+        assert len(args) == len(input_op_names)
         input_map = dict(zip(input_op_names, args))
-        flat_out = tf.graph_util.import_graph_def(graph_def,
-                                                  input_map=input_map,
-                                                  return_elements=output_names)
-        return tf.nest.pack_sequence_as(outputs,
-                                        flat_out,
-                                        expand_composites=True)
+        flat_out = tf.graph_util.import_graph_def(
+            graph_def, input_map=input_map, return_elements=output_names
+        )
+        return tf.nest.pack_sequence_as(outputs, flat_out, expand_composites=True)
 
     return graph_fn
 
 
 class GraphBuilder(object):
-
     def __init__(self):
         self._graph = tf.Graph()
         self._outputs = []
@@ -146,14 +153,13 @@ class GraphBuilder(object):
     def graph(self):
         return self._graph
 
-    def _validate_graph(self, x, name='x'):
+    def _validate_graph(self, x, name="x"):
         if isinstance(x, tf.RaggedTensor):
             return self._validate_graph(x.flat_values, name=name)
         elif isinstance(x, tf.SparseTensor):
             return self._validate_graph(x.indices, name=name)
         if x.graph is not self._graph:
-            raise ValueError(
-                'x is from a different graph - cannot add as input')
+            raise ValueError("x is from a different graph - cannot add as input")
 
     def __enter__(self: T) -> T:
         ctx = self.graph.as_default()
@@ -172,22 +178,23 @@ class GraphBuilder(object):
         return out
 
     def add_input(self, x: TensorLike, key: Optional[str] = None) -> None:
-        self._validate_graph(x, 'input')
+        self._validate_graph(x, "input")
         self._inputs.append(x)
 
     def add_output(self, x) -> None:
-        self._validate_graph(x, 'output')
+        self._validate_graph(x, "output")
         self._outputs.append(x)
 
-    def build(self,
-              inputs_structure=None,
-              extra_outputs: Optional[Iterable[TensorLike]] = None
-             ) -> Optional[Callable]:
+    def build(
+        self,
+        inputs_structure=None,
+        extra_outputs: Optional[Iterable[TensorLike]] = None,
+    ) -> Optional[Callable]:
         inputs = self._inputs
         if inputs_structure is not None:
-            inputs = tf.nest.pack_sequence_as(inputs_structure,
-                                              inputs,
-                                              expand_composites=True)
+            inputs = tf.nest.pack_sequence_as(
+                inputs_structure, inputs, expand_composites=True
+            )
 
         outputs = self.outputs
         if extra_outputs is not None:
@@ -199,8 +206,7 @@ class GraphBuilder(object):
         if len(tf.nest.flatten(outputs, expand_composites=True)) == 0:
             return None
 
-        return subgraph(self.graph.as_graph_def(add_shapes=True), inputs,
-                        outputs)
+        return subgraph(self.graph.as_graph_def(add_shapes=True), inputs, outputs)
 
     @property
     def outputs(self) -> Tuple[TensorLike, ...]:
@@ -212,7 +218,6 @@ class GraphBuilder(object):
 
 
 class ModelBuilder(object):
-
     def __init__(self, batch_size=None):
         self._inputs = []
         self._outputs = []
@@ -224,21 +229,22 @@ class ModelBuilder(object):
         return out
 
     def input_like(self, x: TensorLike, name=None) -> TensorLike:
-        out = tf.keras.Input(shape=x.shape[1:],
-                             batch_size=x.shape[0],
-                             ragged=isinstance(x, tf.RaggedTensor),
-                             sparse=isinstance(x, tf.SparseTensor),
-                             dtype=x.dtype,
-                             name=name)
+        out = tf.keras.Input(
+            shape=x.shape[1:],
+            batch_size=x.shape[0],
+            ragged=isinstance(x, tf.RaggedTensor),
+            sparse=isinstance(x, tf.SparseTensor),
+            dtype=x.dtype,
+            name=name,
+        )
         self._inputs.append(out)
         return out
 
     def add_input(self, x: TensorLike):
         if not tf.keras.backend.is_keras_tensor(x):
-            raise ValueError('input must be a valid keras tensor')
+            raise ValueError("input must be a valid keras tensor")
         if not isinstance(x._keras_history.layer, tf.keras.layers.InputLayer):
-            raise ValueError(
-                'inputs must come directly from a keras `InputLayer`')
+            raise ValueError("inputs must come directly from a keras `InputLayer`")
         self._inputs.append(x)
 
     # def add_output(self, x: TensorLike) -> None:
@@ -248,7 +254,7 @@ class ModelBuilder(object):
 
     def build(self, outputs) -> tf.keras.Model:
         if isinstance(outputs, (list, tuple)) and len(outputs) == 1:
-            outputs, = outputs
+            (outputs,) = outputs
         return tf.keras.Model(self._inputs, outputs)
 
     @property
@@ -261,11 +267,13 @@ class ModelBuilder(object):
 
 
 class BuiltMultiGraph(object):
-
-    def __init__(self, pre_cache_map: Optional[Callable],
-                 pre_batch_map: Optional[Callable],
-                 post_batch_map: Optional[Callable],
-                 trained_model: Optional[tf.keras.Model]):
+    def __init__(
+        self,
+        pre_cache_map: Optional[Callable],
+        pre_batch_map: Optional[Callable],
+        post_batch_map: Optional[Callable],
+        trained_model: Optional[tf.keras.Model],
+    ):
         self._pre_cache_map = pre_cache_map
         self._pre_batch_map = pre_batch_map
         self._post_batch_map = post_batch_map
@@ -292,30 +300,30 @@ class MultiGraphContext(object):
     _stack = []
 
     @staticmethod
-    def get_default() -> 'MultiGraphContext':
+    def get_default() -> "MultiGraphContext":
         if len(MultiGraphContext._stack) == 0:
-            raise RuntimeError('No MultiGraphContext contexts open.')
+            raise RuntimeError("No MultiGraphContext contexts open.")
         return MultiGraphContext._stack[-1]
 
-    def __enter__(self) -> 'MultiGraphContext':
+    def __enter__(self) -> "MultiGraphContext":
         MultiGraphContext._stack.append(self)
         return self
 
     def __exit__(self, type, value, traceback):
         top = MultiGraphContext._stack.pop()
-        assert (top is self)
+        assert top is self
 
     @abc.abstractmethod
     def pre_cache_context(self):
-        raise NotImplementedError('Abstract method')
+        raise NotImplementedError("Abstract method")
 
     @abc.abstractmethod
     def pre_batch_context(self):
-        raise NotImplementedError('Abstract method')
+        raise NotImplementedError("Abstract method")
 
     @abc.abstractmethod
     def post_batch_context(self):
-        raise NotImplementedError('Abstract method')
+        raise NotImplementedError("Abstract method")
 
     @abc.abstractmethod
     def is_pre_cache(self, x: TensorLike):
@@ -343,19 +351,18 @@ class MultiGraphContext(object):
 
     @abc.abstractmethod
     def cache(self, x: TensorLike) -> TensorLike:
-        raise NotImplementedError('Abstract method')
+        raise NotImplementedError("Abstract method")
 
     @abc.abstractmethod
     def batch(self, x: TensorLike) -> TensorLike:
-        raise NotImplementedError('Abstract method')
+        raise NotImplementedError("Abstract method")
 
     @abc.abstractmethod
     def model_input(self, x: TensorLike, name=None) -> TensorLike:
-        raise NotImplementedError('Abstract method')
+        raise NotImplementedError("Abstract method")
 
 
 class MultiGraphBuilder(MultiGraphContext):
-
     def __init__(self, batch_size: Optional[int] = None):
         self._pre_cache_builder = GraphBuilder()
         self._pre_batch_builder = GraphBuilder()
@@ -385,50 +392,49 @@ class MultiGraphBuilder(MultiGraphContext):
         return self.post_batch_graph.as_default()
 
     def is_pre_cache(self, x: TensorLike) -> bool:
-        return hasattr(x, 'graph') and x.graph is self.pre_cache_graph
+        return hasattr(x, "graph") and x.graph is self.pre_cache_graph
 
     def is_pre_batch(self, x: TensorLike) -> bool:
-        return hasattr(x, 'graph') and x.graph is self.pre_batch_graph
+        return hasattr(x, "graph") and x.graph is self.pre_batch_graph
 
     def is_post_batch(self, x: TensorLike) -> bool:
-        return hasattr(x, 'graph') and x.graph is self.post_batch_graph
+        return hasattr(x, "graph") and x.graph is self.post_batch_graph
 
     def assert_is_pre_cache(self, x: TensorLike) -> None:
         if x.graph is not self.pre_cache_graph:
-            raise ValueError('x is not part of pre_cache_graph')
+            raise ValueError("x is not part of pre_cache_graph")
 
     def assert_is_pre_batch(self, x: TensorLike) -> None:
         if x.graph is not self.pre_batch_graph:
-            raise ValueError('x is not part of pre_batch_graph')
+            raise ValueError("x is not part of pre_batch_graph")
 
     def assert_is_post_batch(self, x: TensorLike) -> None:
         if x.graph is not self.post_batch_graph:
-            raise ValueError('x is not part of post_batch_graph')
+            raise ValueError("x is not part of post_batch_graph")
 
     def assert_is_model_tensor(self, x: TensorLike) -> None:
         if x.graph is self.pre_batch_graph:
-            raise ValueError('x is part of pre_batch_graph')
+            raise ValueError("x is part of pre_batch_graph")
         elif x.graph is self.post_batch_graph:
-            raise ValueError('x is part of post_batch_graph')
+            raise ValueError("x is part of post_batch_graph")
 
     def pre_cache_input(self, spec: TensorLikeSpec) -> tf.Tensor:
         with self.pre_cache_context():
             return self._pre_cache_builder.input(spec)
 
     def cache(self, x: tf.Tensor):
-        assert (isinstance(x, tf.Tensor))
+        assert isinstance(x, tf.Tensor)
         self.assert_is_pre_cache(x)
         self._pre_cache_builder.add_output(x)
         with self.pre_batch_context():
             out = _placeholder_like(x)
             self._pre_batch_builder.add_input(out)
-        assert (x.shape is not None)
+        assert x.shape is not None
         return out
 
     def batch(self, x: TensorLike) -> TensorLike:
-        if isinstance(x,
-                      tf.Tensor) and x.shape.ndims > 0 and x.shape[0] is None:
-            raise ValueError('Cannot batch tensor with unknown first dimension')
+        if isinstance(x, tf.Tensor) and x.shape.ndims > 0 and x.shape[0] is None:
+            raise ValueError("Cannot batch tensor with unknown first dimension")
         self._pre_batch_builder.add_output(x)
         with self._post_batch_builder:
             out = _batched_placeholder_like(x)
@@ -439,8 +445,9 @@ class MultiGraphBuilder(MultiGraphContext):
         self._post_batch_builder.add_output(x)
         return self._model_builder.input_like(x, name=name)
 
-    def build(self, model_outputs, labels, weights=None,
-              inputs_structure=None) -> BuiltMultiGraph:
+    def build(
+        self, model_outputs, labels, weights=None, inputs_structure=None
+    ) -> BuiltMultiGraph:
 
         rest = (labels,) if weights is None else (labels, weights)
 
@@ -448,7 +455,8 @@ class MultiGraphBuilder(MultiGraphContext):
             self._pre_cache_builder.build(inputs_structure=inputs_structure),
             self._pre_batch_builder.build(),
             self._post_batch_builder.build(extra_outputs=rest),
-            trained_model=self._model_builder.build(model_outputs))
+            trained_model=self._model_builder.build(model_outputs),
+        )
 
 
 get_default = MultiGraphContext.get_default
@@ -507,9 +515,7 @@ def model_input(x: TensorLike, name=None) -> TensorLike:
 
 
 def build_multi_graph(
-        build_fn,
-        inputs_spec,
-        batch_size: Optional[int] = None,
+    build_fn, inputs_spec, batch_size: Optional[int] = None,
 ) -> BuiltMultiGraph:
     builder = MultiGraphBuilder(batch_size)
     with builder:

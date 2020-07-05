@@ -1,10 +1,10 @@
 import numpy as np
 import tensorflow as tf
+
 from ecn.ops import ragged
 
 
 class RaggedOpsTest(tf.test.TestCase):
-
     def test_ragged_csr_transpose_empty_end(self):
         # grid = comp.Grid((7,))
         # link = grid.link((2,), (2,), (0,))
@@ -13,7 +13,8 @@ class RaggedOpsTest(tf.test.TestCase):
         splits = tf.constant([0, 2, 4, 6])
         values = tf.range(6)
         indices, splits, values = self.evaluate(
-            ragged.transpose_csr(indices, splits, values, nrows_out=7))
+            ragged.transpose_csr(indices, splits, values, nrows_out=7)
+        )
         np.testing.assert_equal(indices, [0, 0, 1, 1, 2, 2])
         np.testing.assert_equal(splits, [0, 1, 2, 3, 4, 5, 6, 6])
 
@@ -24,7 +25,8 @@ class RaggedOpsTest(tf.test.TestCase):
         splits = ragged.ids_to_splits(i)
 
         actual_indices, actual_splits, actual_values = self.evaluate(
-            ragged.transpose_csr(j, splits, values))
+            ragged.transpose_csr(j, splits, values)
+        )
         # expected_j = [0, 1, 1, 1, 2, 2, 3, 4]
         expected_splits = [0, 1, 4, 6, 7, 8]
         np.testing.assert_equal(actual_splits, expected_splits)
@@ -40,7 +42,8 @@ class RaggedOpsTest(tf.test.TestCase):
         values = []
 
         actual_indices, actual_splits, actual_values = self.evaluate(
-            ragged.transpose_csr(indices, splits, values))
+            ragged.transpose_csr(indices, splits, values)
+        )
         expected_indices = []
         expected_splits = [0]
         expected_values = []
@@ -49,5 +52,5 @@ class RaggedOpsTest(tf.test.TestCase):
         np.testing.assert_equal(actual_values, expected_values)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     tf.test.main()
