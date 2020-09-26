@@ -6,15 +6,12 @@ import numpy as np
 import tensorflow as tf
 from absl import logging
 
+import kblocks.multi_graph as mg
 from ecn import components as comp
-from ecn import multi_graph as mg
-from kblocks.framework.pipelines import BasePipeline
-from kblocks.framework.sources import DataSource, PipelinedSource
+from kblocks.framework.sources import DataSource, PipelinedSource, RectBatcher
 from kblocks.framework.trainable import Trainable
 
-# from kblocks.keras import losses
-# from kblocks.keras import metrics
-# from kblocks.keras import optimizers
+# from ecn import multi_graph as mg
 
 losses = tf.keras.losses
 metrics = tf.keras.metrics
@@ -123,14 +120,13 @@ def multi_graph_trainable(
 
     logging.info("Successfully built!")
 
-    pipeline = BasePipeline(
-        batch_size,
+    source = PipelinedSource(
+        batcher=RectBatcher(batch_size),
         pre_cache_map=built.pre_cache_map,
         pre_batch_map=built.pre_batch_map,
         post_batch_map=built.post_batch_map,
         **pipeline_kwargs,
     )
-    source = PipelinedSource(base_source, pipeline)
     model = built.trained_model
     if rebuild_model_with_xla:
         with tf.xla.experimental.jit_scope():
@@ -149,8 +145,8 @@ def vis_streams(
     group_size=1,
     skip_vis=False,
 ):
-    from events_tfds.vis.image import as_frames
     import events_tfds.vis.anim as anim
+    from events_tfds.vis.image import as_frames
 
     builder = mg.MultiGraphBuilder(batch_size=1)
     with builder:
@@ -395,20 +391,16 @@ def benchmark_source(source_fn, build_fn, take=1000, batch_size=32):
 
 
 if __name__ == "__main__":
-    from ecn.problems import builders
-    from ecn.problems import sources
+    from ecn.problems import builders, sources
 
     # from ecn.problems import augment
-
     # source = sources.ncars_source()
     # build_fn = builders.ncars_inception_graph
-
     # source = sources.ntidigits_source()
     # build_fn = functools.partial(builders.simple1d_half_graph,
     #                              #  kernel_size=5,
     #                              #  threshold=1.0
     #                             )
-
     # build_fn = builders.simple_multi_graph
     # build_fn = builders.inception_multi_graph
     # source = sources.mnist_dvs_source()
@@ -419,13 +411,10 @@ if __name__ == "__main__":
     #                              start_mean_size=131072,
     #                              hidden_mean_sizes=(16384, 4096, 1024, 128),
     #                              final_mean_size=32)
-
     # source = sources.cifar10_dvs_source()
     # build_fn = builders.inception128_multi_graph
-
     # build_fn = functools.partial(builders.inception_pooling, threshold=1.1)
     # source = sources.asl_dvs_source()
-
     # build_fn = functools.partial(builders.inception_pooling, num_levels=4)
 
     build_fn = functools.partial(

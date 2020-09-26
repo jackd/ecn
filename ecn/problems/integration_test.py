@@ -9,41 +9,37 @@ import tensorflow as tf
 import ecn.problems.builders as builders
 import ecn.problems.sources as sources
 import ecn.problems.utils as utils
-from kblocks.framework.sources import DataSource
+from kblocks.framework.sources import DataSource, Split
 
 Lambda = tf.keras.layers.Lambda
 
 
 class DeterministicSource(DataSource):
-    def __init__(self, base_source, num_examples=2):
-        self._base = base_source
+    def __init__(self, base: DataSource, num_examples=2):
         self._data = {}
         for split in ("train", "validation"):
             out = []
-            for example in base_source.get_dataset(split).take(num_examples):
+            for example in base.get_dataset(split).take(num_examples):
                 out.append(tf.nest.map_structure(lambda x: x.numpy(), example))
             self._data[split] = tuple(out)
         self._num_examples = num_examples
+        self._element_spec = base.element_spec
 
-    @property
-    def meta(self):
-        return self._base.meta
-
-    @property
-    def example_spec(self):
-        return self._base.example_spec
-
-    def examples_per_epoch(self, split):
-        return self._num_examples
-
-    def get_dataset(self, split):
+    def get_dataset(self, split: Split) -> tf.data.Dataset:
         data = self._data.get(split)
-        spec = self.example_spec
+        spec = self.element_spec
         return tf.data.Dataset.from_generator(
             lambda: data,
             tf.nest.map_structure(lambda x: x.dtype, spec),
             tf.nest.map_structure(lambda x: x.shape, spec),
         )
+
+    @property
+    def element_spec(self):
+        return self._element_spec
+
+    def epoch_length(self, split: Split) -> int:
+        return self._num_examples
 
 
 class IntegrationTest(tf.test.TestCase):
@@ -105,14 +101,7 @@ class IntegrationTest(tf.test.TestCase):
             static_sizes=False,
         )
 
-        # def mod_build(*args, **kwargs):
-        #     out, labels, weights = build_fn(*args, **kwargs)
-        #     del labels, weights
-
-        #     return out[0], (), ()
-
         self._test_batched_trainable(base_source, build_fn)
-        # self._test_batched_trainable(base_source, mod_build)
 
     def test_inception(self):
         base_source = sources.nmnist_source()
@@ -129,4 +118,3 @@ class IntegrationTest(tf.test.TestCase):
 
 if __name__ == "__main__":
     tf.test.main()
-    # IntegrationTest().test_simple_multi_graph()

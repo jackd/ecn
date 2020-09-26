@@ -6,7 +6,7 @@ from ecn.problems import sources
 source = sources.ncars_source()
 
 dataset = source.get_dataset("train")
-total = source.examples_per_epoch("train")
+total = source.epoch_length("train")
 label_set = set()
 
 for example, label in tqdm(dataset, total=total):

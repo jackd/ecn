@@ -1,24 +1,14 @@
 from typing import Sequence
 
 import gin
+import kblocks.multi_graph as mg
 import numpy as np
 import tensorflow as tf
-
-from ecn import components as comp
-from ecn import multi_graph as mg
 from kblocks.keras import layers
 
+from ecn import components as comp
+
 Lambda = tf.keras.layers.Lambda
-
-
-class Printer(tf.keras.layers.Layer):
-    def __init__(self, fn, **kwargs):
-        self._fn = fn
-        super().__init__(**kwargs)
-
-    def call(self, inputs):
-        with tf.control_dependencies([tf.print(self._fn(inputs))]):
-            return tf.nest.map_structure(tf.identity, inputs)
 
 
 def _complex(args):
@@ -39,7 +29,7 @@ def dropout(x, dropout_rate: float):
 
 
 def flatten_complex(x, axis=-1):
-    return tf.concat((tf.math.real(x), tf.math.imag(x)), axis=axis)
+    return tf.concat((tf.math.real(x), tf.math.imag(x)), axis)
 
 
 def apply_dense(layer, x):

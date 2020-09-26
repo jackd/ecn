@@ -8,7 +8,7 @@ from ecn.problems import sources
 # source = sources.ncaltech101_source()
 source = sources.ncars_source()
 split = "train"
-total = source.examples_per_epoch(split)
+total = source.epoch_length(split)
 num_events = np.empty((total,), dtype=np.int64)
 for i, (example, label) in enumerate(tqdm(source.get_dataset(split), total=total)):
     num_events[i] = example["time"].shape[0]

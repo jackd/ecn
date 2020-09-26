@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 import gin
 import numpy as np
@@ -6,7 +6,7 @@ import tensorflow as tf
 
 from ecn.ops import augment as augment_ops
 from ecn.ops.augment import MaybeBool
-from kblocks.framework.sources import DataSource, Split
+from kblocks.framework.sources import DataSource, DelegatingSource, Split
 
 MaybeBool = augment_ops.MaybeBool
 DEFAULT_ROTATE_LIMITS = (-np.pi / 8, np.pi / 8)
@@ -14,17 +14,17 @@ AUTOTUNE = tf.data.experimental.AUTOTUNE
 
 
 @gin.configurable(module="ecn.sources")
-class Augmented2DSource(DataSource):
+class Augmented2DSource(DelegatingSource):
     def __init__(
         self,
-        base_source: DataSource,
+        base: DataSource,
         flip_ud: MaybeBool = False,
         flip_lr: MaybeBool = False,
         flip_time: MaybeBool = 0.5,
         rotate_limits: Optional[Tuple[float, float]] = DEFAULT_ROTATE_LIMITS,
         num_parallel_calls: int = AUTOTUNE,
     ):
-        self._base_source = base_source
+        super().__init__(base=base)
         self._rotate_limits = rotate_limits
         self._num_parallel_calls = num_parallel_calls
         self._map_params = dict(
@@ -34,12 +34,8 @@ class Augmented2DSource(DataSource):
             rotate_limits=rotate_limits,
         )
 
-    @property
-    def meta(self) -> Dict[str, Any]:
-        return self._base_source.meta
-
     def get_dataset(self, split: Split):
-        dataset = self._base_source.get_dataset(split)
+        dataset = super().get_dataset(split)
         if split == "train":
 
             def map_fn(features, labels, weights=None):
@@ -50,7 +46,7 @@ class Augmented2DSource(DataSource):
                     time,
                     coords,
                     polarity,
-                    grid_shape=self._base_source.meta["grid_shape"],
+                    grid_shape=self.meta["grid_shape"],
                     **self._map_params
                 )
 
@@ -63,6 +59,3 @@ class Augmented2DSource(DataSource):
 
             dataset = dataset.map(map_fn, self._num_parallel_calls)
         return dataset
-
-    def examples_per_epoch(self, split: Split):
-        return self._base_source.examples_per_epoch(split)

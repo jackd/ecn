@@ -8,35 +8,28 @@ BoolTensor = tf.Tensor
 IntTensor = tf.Tensor
 FloatTensor = tf.Tensor
 
-# # EXPERIMENTAL_COMPILE = True
-# EXPERIMENTAL_COMPILE = False
-
 
 def map_reduce_sum(
     map_fn, inputs, out_shape, out_type, parallel_iterations=None, method="unstack"
 ):
     if method == "fold":
         init = tf.zeros(out_shape, dtype=out_type)
-        out = tf.foldl(lambda acc, args: acc + map_fn(args), inputs, init)
-    elif method == "map":
-        out = tf.reduce_sum(
+        return tf.foldl(lambda acc, args: acc + map_fn(args), inputs, init)
+    if method == "map":
+        return tf.reduce_sum(
             tf.map_fn(
                 map_fn, inputs, parallel_iterations=parallel_iterations, dtype=out_type
             ),
             axis=0,
         )
-    elif method == "vmap":
-        out = tf.reduce_sum(tf.vectorized_map(map_fn, inputs), axis=0)
-    elif method == "unstack":
+    if method == "vmap":
+        return tf.reduce_sum(tf.vectorized_map(map_fn, inputs), axis=0)
+    if method == "unstack":
         inputs = (tf.unstack(i, axis=0) for i in inputs)
-        out = tf.add_n([map_fn(args) for args in zip(*inputs)])
-    else:
-        raise ValueError(
-            "Invalid method {}: must be one of {}".format(
-                method, ("fold", "map", "vmap", "unstack")
-            )
-        )
-    return out
+        return tf.add_n([map_fn(args) for args in zip(*inputs)])
+
+    options = ("fold", "map", "vmap", "unstack")
+    raise ValueError(f"Invalid method {method}: must be one of {options}")
 
 
 def as_complex_tensor(x: tf.Tensor):
@@ -46,14 +39,13 @@ def as_complex_tensor(x: tf.Tensor):
 def as_complex(x):
     if isinstance(x, tf.Tensor):
         return as_complex_tensor(x)
-    elif x.dtype.is_complex:
+    if x.dtype.is_complex:
         return x
-    elif isinstance(x, tf.SparseTensor):
+    if isinstance(x, tf.SparseTensor):
         return tf.SparseTensor(x.indices, as_complex_tensor(x.values), x.dense_shape)
-    elif isinstance(x, tf.RaggedTensor):
+    if isinstance(x, tf.RaggedTensor):
         return tf.ragged.map_flat_values(as_complex_tensor, x)
-    else:
-        raise TypeError(f"Unrecognized type for x, {x}")
+    raise TypeError(f"Unrecognized type for x, {x}")
 
 
 def _validate_dtype(x):
@@ -63,20 +55,28 @@ def _validate_dtype(x):
 def complex_split(x):
     if isinstance(x, tf.Tensor):
         return tf.math.real(x), tf.math.imag(x)
-    elif isinstance(x, tf.SparseTensor):
+    if isinstance(x, tf.SparseTensor):
         real = tf.SparseTensor(x.indices, tf.math.real(x.values), x.dense_shape)
         imag = tf.SparseTensor(x.indices, tf.math.imag(x.values), x.dense_shape)
         return real, imag
-    elif isinstance(x, tf.RaggedTensor):
+    if isinstance(x, tf.RaggedTensor):
         return (
             tf.ragged.map_flat_values(tf.math.real, x),
             tf.ragged.map_flat_values(tf.math.imag, x),
         )
-    else:
-        raise TypeError(f"Unrecognized tensor type for x, {x}")
+    raise TypeError(f"Unrecognized tensor type for x, {x}")
 
 
-def sparse_dense_matmul(sp_a: tf.SparseTensor, b: tf.Tensor):
+def csr_matmul(sp_a: tf.SparseTensor, b: tf.Tensor):
+    from tensorflow.python.ops.linalg.sparse import (  # pylint: disable=import-outside-toplevel
+        sparse as sparse_lib,
+    )
+
+    return sparse_lib.matmul(sparse_lib.CSRSparseMatrix(sp_a), b)
+
+
+def sparse_dense_matmul(sp_a: tf.SparseTensor, b: tf.Tensor, use_csr: bool = False):
+    matmul = csr_matmul if use_csr else tf.sparse.sparse_dense_matmul
     # gradients aren't supported for complex sparse dense multiplication
     if sp_a.dtype.is_complex:
         assert b.dtype.is_complex
@@ -86,16 +86,15 @@ def sparse_dense_matmul(sp_a: tf.SparseTensor, b: tf.Tensor):
         b0_cat = tf.concat((br, bi), axis=-1)
         b1_cat = tf.concat((-bi, br), axis=-1)
 
-        t0 = tf.sparse.sparse_dense_matmul(ar, b0_cat)
-        t1 = tf.sparse.sparse_dense_matmul(ai, b1_cat)
+        t0 = matmul(ar, b0_cat)
+        t1 = matmul(ai, b1_cat)
         total = t0 + t1
         real, imag = tf.split(total, 2, axis=-1)
         return tf.complex(real, imag)
-    else:
-        return tf.sparse.sparse_dense_matmul(sp_a, b)
+
+    return matmul(sp_a, b)
 
 
-# @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def featureless_temporal_event_conv(
     dt: tf.SparseTensor, kernel: FloatTensor, decay: FloatTensor
 ) -> FloatTensor:
@@ -118,7 +117,6 @@ def featureless_temporal_event_conv(
         [n_out, f_out] output features.
     """
     # arg checking
-    # tf.debugging.assert_non_negative(dt.values)
     if decay.dtype.is_complex:
         assert kernel.dtype.is_complex
         dt = as_complex(dt)
@@ -131,8 +129,6 @@ def featureless_temporal_event_conv(
 
     assert isinstance(dt, tf.SparseTensor)
     dt.shape.assert_has_rank(2)
-    # tf.debugging.assert_non_negative(
-    #     tf.math.real(decay) if decay.dtype.is_complex else decay)
     values = tf.exp(
         -tf.expand_dims(decay, axis=0) * tf.expand_dims(dt.values, axis=-1)
     )  # [E, kt]
@@ -143,7 +139,6 @@ def featureless_temporal_event_conv(
     return tf.matmul(row_sum, kernel)
 
 
-# @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def binary_temporal_event_conv(
     features: BoolTensor,
     dt: tf.SparseTensor,
@@ -172,7 +167,6 @@ def binary_temporal_event_conv(
         [n_out, f_out] output features.
     """
     # arg checking
-    # tf.debugging.assert_non_negative(dt.values)
     if decay.dtype.is_complex:
         assert kernel.dtype.is_complex
         dt = as_complex(dt)
@@ -192,8 +186,6 @@ def binary_temporal_event_conv(
 
     assert isinstance(dt, tf.SparseTensor)
     dt.shape.assert_has_rank(2)
-    # tf.debugging.assert_non_negative(
-    #     tf.math.real(decay) if decay.dtype.is_complex else decay)
     values = tf.exp(
         -tf.expand_dims(decay, axis=0) * tf.expand_dims(dt.values, axis=-1)
     )  # [E, kt]
@@ -201,13 +193,11 @@ def binary_temporal_event_conv(
     features = tf.gather(features, j)
     segments = i * 2 + tf.cast(features, i.dtype)
     n_out = dt.dense_shape[0]
-    # n_out * (2 * tk)
     row_sum = tf.math.unsorted_segment_sum(values, segments, num_segments=n_out * 2)
     row_sum = tf.reshape(row_sum, (-1, 2 * kt))
     return tf.matmul(row_sum, kernel)
 
 
-# @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def temporal_event_pooling(
     features: FloatTensor,
     dt: FloatTensor,
@@ -251,7 +241,6 @@ def temporal_event_pooling(
     return tf.matmul(left, kernel)
 
 
-# @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def temporal_event_conv(
     features: FloatTensor,
     dt: tf.SparseTensor,
@@ -259,6 +248,7 @@ def temporal_event_conv(
     decay: FloatTensor,
     validate: bool = True,
     combine: str = "unstack",
+    use_csr: bool = False,
 ) -> FloatTensor:
     """
     Global event convolution.
@@ -282,7 +272,6 @@ def temporal_event_conv(
         [n_out, f_out] output features.
     """
     # arg checking
-    # tf.debugging.assert_non_negative(dt.values)
     if decay.dtype.is_complex:
         assert kernel.dtype.is_complex
         dt = as_complex(dt)
@@ -309,15 +298,12 @@ def temporal_event_conv(
     sparse_values = dt.values
     sparse_indices = dt.indices
     dense_shape = dt.dense_shape
-    # tf.debugging.assert_non_negative(
-    #     tf.math.real(decay) if decay.dtype.is_complex else decay)
     sparse_values = tf.exp(-tf.expand_dims(decay, axis=-1) * sparse_values)
 
     def map_fn(args):
         kernel, sparse_values = args
         st = tf.SparseTensor(sparse_indices, sparse_values, dense_shape)
-        # out_features = tf.sparse.sparse_dense_matmul(st, features)
-        out_features = sparse_dense_matmul(st, features)
+        out_features = sparse_dense_matmul(st, features, use_csr=use_csr)
         return tf.matmul(out_features, kernel)
 
     f_out = kernel.shape[-1]
@@ -327,13 +313,7 @@ def temporal_event_conv(
         map_fn, (kernel, sparse_values), out_shape, kernel.dtype, method=combine
     )
 
-    # kernel = tf.unstack(kernel, axis=0)
-    # sparse_values = tf.unstack(sparse_values, axis=0)
-    # features = tf.add_n([map_fn(k, sv) for k, sv in zip(kernel, sparse_values)])
-    # return features
 
-
-# @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def featureless_spatio_temporal_event_conv(
     dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]],
     kernel: FloatTensor,
@@ -378,7 +358,6 @@ def featureless_spatio_temporal_event_conv(
     return tf.add_n(terms)
 
 
-# @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def binary_spatio_temporal_event_conv(
     features: BoolTensor,
     dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]],
@@ -431,13 +410,13 @@ def binary_spatio_temporal_event_conv(
     return tf.add_n(terms)
 
 
-# @tf.function(experimental_compile=EXPERIMENTAL_COMPILE)
 def spatio_temporal_event_conv(
     features: FloatTensor,
     dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]],
     kernel: FloatTensor,
     decay: FloatTensor,
     combine: str = "unstack",
+    use_csr: bool = False,
 ) -> FloatTensor:
     """
     Event convolution.
@@ -482,7 +461,9 @@ def spatio_temporal_event_conv(
     kernel = tf.unstack(kernel, axis=0)
     decay = tf.unstack(decay, axis=0)
     terms = [
-        temporal_event_conv(features, *args, validate=False, combine=combine)
+        temporal_event_conv(
+            features, *args, validate=False, combine=combine, use_csr=use_csr
+        )
         for args in zip(dt_, kernel, decay)
     ]
     return tf.add_n(terms)
@@ -491,7 +472,6 @@ def spatio_temporal_event_conv(
 def _split_spatial_dt(dt: Union[tf.SparseTensor, Sequence[tf.SparseTensor]], sk: int):
     # arg checking
     if isinstance(dt, tf.SparseTensor):
-        # dt.shape.assert_has_rank(3)
         _validate_dtype(dt)
         shape = getattr(dt, "shape")
         if shape.ndims == 4:

@@ -158,7 +158,7 @@ trainable = multi_graph_trainable(
 )
 source = trainable.source
 ds = source.get_dataset(split)
-total = source.examples_per_epoch(split)
+total = source.epoch_length(split)
 
 # def map_fn(events, labels):
 #     shape = tf.constant((34, 34), dtype=tf.int64)
@@ -177,7 +177,7 @@ total = source.examples_per_epoch(split)
 #     return partitions, indices, splits
 
 # ds = source.get_dataset(split).map(map_fn)
-# total = source.examples_per_epoch(split)
+# total = source.epoch_length(split)
 
 for args in tqdm(ds, total=total):
     pass
@@ -186,5 +186,5 @@ for args in tqdm(ds, total=total):
 #     ds = trainable.source.get_dataset(split)
 #     out = tf.compat.v1.data.make_one_shot_iterator(ds).get_next()
 #     with tf.compat.v1.Session() as sess:
-#         for i in tqdm(range(trainable.source.examples_per_epoch(split))):
+#         for i in tqdm(range(trainable.source.epoch_length(split))):
 #             sess.run(out)

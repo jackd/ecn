@@ -252,6 +252,6 @@ def sparse_neighborhood(
     valid_coords = flat_coords[valid]
     valid_partitions = partitions[valid]
     coords_1d = ravel_multi_index_transpose(valid_coords, in_shape)
-    lengths = np.count_nonzero(np.reshape(valid, (-1, offset.shape[0])), axis=-1)
+    lengths = np.count_nonzero(np.reshape(valid, (-1, offset.shape[0])), axis=1)
     splits = ragged.lengths_to_splits(lengths)
     return valid_partitions, coords_1d, splits, out_shape

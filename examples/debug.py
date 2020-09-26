@@ -78,7 +78,7 @@ def run_example(features, labels, grid_shape, num_classes):
 source = sources.asl_dvs_source()
 meta = source.meta
 ds = source.get_dataset("train")
-total = source.examples_per_epoch("train")
+total = source.epoch_length("train")
 
 for features, labels in tqdm(ds, total=total):
     run_example(features, labels, **meta)

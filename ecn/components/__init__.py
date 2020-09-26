@@ -6,16 +6,15 @@ import tensorflow as tf
 
 import ecn.pub_sub as ps
 import kblocks.ops.sparse as sparse_ops
-from ecn import multi_graph as mg
 from ecn.layers import conv as conv_layers
 from ecn.ops import grid as grid_ops
 from ecn.ops import neighbors as neigh_ops
 from ecn.ops import ragged as ragged_ops
 from ecn.ops import spike as spike_ops
+from kblocks import multi_graph as mg
 from kblocks.extras.layers import ragged as ragged_layers
 from kblocks.extras.layers import shape as shape_layers
 from kblocks.keras import layers
-from kblocks.ops import repeat as tf_repeat
 from kblocks.ops.ragged import post_batch_ragged, pre_batch_ragged
 
 BoolTensor = tf.Tensor
@@ -28,12 +27,6 @@ IntArray = np.ndarray
 DTYPE = tf.int32
 
 Lambda = tf.keras.layers.Lambda
-
-# def Lambda(*args, **kwargs):
-#     layer = tf.keras.layers.Lambda(*args, **kwargs)
-#     if layer.name == 'lambda_6':
-#         raise Exception()
-#     return layer
 
 T = TypeVar("T")
 
@@ -84,16 +77,26 @@ def tf_stack(values, axis=0, name=None):
 
 def pad_ragged(rt, padding, values=0):
     flat_values = rt.values
-
-    flat_values = tf.pad(rt.flat_values, [[0, padding]], constant_values=values)
+    padding_tensor = [[0, 0]] * (len(rt.flat_values.shape))
+    padding_tensor[0][1] = padding
+    padding_tensor = tf.convert_to_tensor(padding_tensor)
+    flat_values = tf.pad(rt.flat_values, padding_tensor, constant_values=values)
     starts, total = tf.split(rt.row_splits, [-1, 1])
     row_splits = tf.concat((starts, total + padding), axis=0)
+
+    # def fn(args):
+    #     flat_values, row_splits = args
+    #     return tf.RaggedTensor.from_row_splits(
+    #         flat_values, tf.cast(row_splits, tf.int64), validate=True
+    #     )
+
+    # return tf.keras.layers.Lambda(fn)([flat_values, row_splits])
     return tf.RaggedTensor.from_row_splits(
         flat_values, tf.cast(row_splits, tf.int64), validate=False
     )
 
 
-class Grid(object):
+class Grid:
     def __init__(self, shape, dtype=DTYPE):
         self._dtype = dtype
         self._static_shape = None if isinstance(shape, tf.Tensor) else tuple(shape)
@@ -167,7 +170,7 @@ class Grid(object):
                 partitions,
                 np.prod(kernel_shape, dtype=self.dtype.as_numpy_dtype),
             )
-            link._transpose = link
+            link._transpose = link  # pylint: disable=protected-access
         return link
 
     def partial_self_link(self, kernel_mask: BoolArray) -> "GridNeighbors":
@@ -181,24 +184,23 @@ class Grid(object):
             link = GridNeighbors(
                 self, self, indices, splits, partitions, num_partitions
             )
-            link._transpose = link
+            link._transpose = link  # pylint: disable=protected-access
             return link
 
     def ravel_indices(self, indices: IntTensor, axis=-1):
         indices.shape.assert_has_rank(2)
         with mg.pre_cache_context():
-            return grid_ops.ravel_multi_index(indices, self._shape)
+            return grid_ops.ravel_multi_index(indices, self._shape, axis=axis)
 
     def unravel_indices(self, indices: IntTensor, axis=-1):
         indices.shape.assert_has_rank(1)
         with mg.pre_cache_context():
             if axis == 0:
                 return tf.unravel_index(indices, self._shape)
-            else:
-                return grid_ops.unravel_index_transpose(indices, self._shape)
+            return grid_ops.unravel_index_transpose(indices, self._shape)
 
 
-class GridNeighbors(object):
+class GridNeighbors:
     """Contains sparse connectedness information between two grids."""
 
     def __init__(
@@ -242,7 +244,7 @@ class GridNeighbors(object):
                     partitions,
                     self.num_partitions,
                 )
-                self._transpose._transpose = self
+                self._transpose._transpose = self  # pylint: disable=protected-access
         return self._transpose
 
     @property
@@ -270,7 +272,7 @@ class GridNeighbors(object):
         return self._partitions
 
 
-class Stream(object):
+class Stream:
     _publisher = ps.Publisher()
     on_create: ps.Topic = _publisher.topic
 
@@ -278,7 +280,7 @@ class Stream(object):
         self,
         times: IntTensor,
         min_mean_size: Optional[int] = None,
-        bucket_sizes: bool = True,
+        bucket_sizes: bool = False,
         dtype=DTYPE,
     ):
         self._dtype = dtype
@@ -353,12 +355,9 @@ class Stream(object):
             self._batched_times = times.flat_values
             self._value_rowids = times.value_rowids()
             self._row_splits = times.row_splits
-            # self._row_starts = times.row_starts()
-            # self._valid_size = self._row_splits[-1]
             self._row_starts, total = tf.split(self._row_splits, [-1, 1], axis=0)
             self._valid_size = tf.squeeze(total, axis=0)
 
-            # row_ends = self._row_splits[1:]
             _, row_ends = tf.split(self._row_splits, [1, -1])
             self._row_lengths = row_ends - self._row_starts
             self._row_ends = row_ends - 1  # used in model gather
@@ -475,7 +474,6 @@ class Stream(object):
         features = mg.batch(features)
         with mg.post_batch_context():
             features = post_batch_ragged(features, validate=False)
-            # if self._min_mean_size is not None:
             if self.padding is not None:
                 features = pad_ragged(features, self.padding)
         features = mg.model_input(features)
@@ -501,7 +499,7 @@ class Stream(object):
         ret = {"final": labels}
         with mg.post_batch_context():
             row_lengths = self.row_lengths
-            labels = tf_repeat(labels, row_lengths, axis=0)
+            labels = tf.repeat(labels, row_lengths, axis=0)
             # if self._min_mean_size is not None:
             if self.padding is not None:
                 labels = tf.pad(labels, [[0, self.padding]])
@@ -519,7 +517,7 @@ class Stream(object):
         with mg.post_batch_context():
             row_lengths = self.row_lengths
             weights = weights / (self.batch_size * row_lengths)
-            weights = tf_repeat(weights, row_lengths, axis=0)
+            weights = tf.repeat(weights, row_lengths, axis=0)
             # if self._min_mean_size is not None:
             if self.padding is not None:
                 weights = tf.pad(weights, [[0, self.padding]])
@@ -743,10 +741,6 @@ class SpatialStream(Stream):
             tf.reshape,
             arguments=dict(shape=(-1, num_frames, *static_shape, features.shape[-1])),
         )(features)
-        # HACK
-        # features = tf.reduce_mean(features, axis=0)
-        # features = tf.reshape(features, (1, 1, 1, 1, -1))
-        # features = tf.tile(features, (batch_size, num_frames, *static_shape, 1))
 
         return features
 
@@ -955,7 +949,6 @@ class Convolver(Generic[S0, S1]):
 
         ragged_indices = mg.batch(ragged_indices)
         with mg.post_batch_context():
-            # batch_size = ragged_indices.nrows()
             b, i, j = sparse_ops.ragged_to_sparse_indices(
                 ragged_indices, in_stream.row_starts
             )
@@ -971,9 +964,6 @@ class Convolver(Generic[S0, S1]):
             dense_shape = tf_stack(
                 (out_stream.batched_size, in_stream.batched_size), axis=0
             )
-            # dense_shape = tf_stack(
-            #     (batch_size, out_stream.batched_size, in_stream.batched_size),
-            #      axis=0)
             ij = tf_stack((i, j), axis=-1)
             assert ij.dtype == tf.int64
             assert dense_shape.dtype == tf.int64
@@ -1018,9 +1008,6 @@ class Convolver(Generic[S0, S1]):
 
         components = []
         with mg.pre_cache_context():
-            # tf.print(
-            #     tf.shape(self._splits)[0],
-            #     tf.shape(self._indices)[0], self._splits[-1])
             rowids = tf.ragged.row_splits_to_segment_ids(
                 self._splits, out_type=self.dtype
             )
@@ -1034,7 +1021,6 @@ class Convolver(Generic[S0, S1]):
                 num_partitions,
             )
 
-            # components = []
             for ij in ijs:
                 i, j = tf.unstack(ij, axis=-1)
                 indices = tf.RaggedTensor.from_value_rowids(
@@ -1072,7 +1058,7 @@ class Convolver(Generic[S0, S1]):
                     ragged_indices.row_splits, out_type=self.dtype
                 )
                 ragged_indices = ragged_indices.values
-                b = tf_repeat(b, ragged_indices.row_lengths(), axis=0)
+                b = tf.repeat(b, ragged_indices.row_lengths(), axis=0)
                 # sparse indices must eventually be int64
                 i = tf.ragged.row_splits_to_segment_ids(
                     ragged_indices.row_splits, out_type=tf.int64
@@ -1092,7 +1078,6 @@ class Convolver(Generic[S0, S1]):
 
             # block diagonalize
             # skip i offset since it was automatically done in ragged batching
-            # cat_i = cat_i + tf.gather(out_stream.row_starts, cat_b)
             cat_j = cat_j + tf.gather(in_stream.row_starts, cat_b)
 
             cat_dt = (
@@ -1231,11 +1216,6 @@ def spatio_temporal_convolver(
             decay_time * max_decays,
         )
 
-        # op = tf.assert_equal(tf.shape(indices)[0],
-        #                      splits[-1],
-        #                      message='spatio_temporal')
-        # with tf.control_dependencies([op]):
-        #     partitions = tf.identity(partitions)
     return Convolver(
         num_partitions=grid_neighbors.num_partitions,
         in_stream=in_stream,
@@ -1300,11 +1280,6 @@ def flatten_convolver(
             out_times=out_stream.times,
             event_duration=decay_time * max_decays,
         )
-        # op = tf.assert_equal(tf.shape(indices)[0],
-        #                      splits[-1],
-        #                      message='flatten')
-        # with tf.control_dependencies([op]):
-        #     partitions = tf.identity(partitions)
     return Convolver[SpatialStream, Stream](
         num_partitions=num_partitions_,
         in_stream=in_stream,
@@ -1319,8 +1294,6 @@ def flatten_convolver(
 def temporal_convolver(
     in_stream: Stream, out_stream: Stream, decay_time: int, max_decays: int = 4
 ) -> Convolver[Stream, Stream]:
-    # assert (not isinstance(in_stream, SpatialStream))
-    # assert (not isinstance(out_stream, SpatialStream))
     with mg.pre_cache_context():
         indices, splits = neigh_ops.compute_pooled_neighbors(
             in_stream.times, out_stream.times, event_duration=max_decays * decay_time

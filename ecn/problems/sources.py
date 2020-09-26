@@ -36,17 +36,12 @@ def mnist_dvs_source(scale=16, train_percent=90, **kwargs):
     builder = mnist_dvs.MnistDVS(config=config)
     if kwargs.get("download_and_prepare", True):
         builder.download_and_prepare()
-    examples_per_epoch = builder.info.splits["train"].num_examples
 
     return TfdsSource(
         builder,
         split_map={
             "train": f"train[:{train_percent}%]",
             "validation": f"train[{train_percent}%:]",
-        },
-        examples_per_epoch={
-            "train": int(examples_per_epoch * train_percent / 100),
-            "validation": int(examples_per_epoch * (1 - train_percent / 100)),
         },
         meta=dict(num_classes=mnist_dvs.NUM_CLASSES, grid_shape=mnist_dvs.GRID_SHAPE),
         **kwargs,
@@ -60,17 +55,12 @@ def ncaltech101_source(train_percent=90, **kwargs):
     builder = ncaltech101.Ncaltech101()
     if kwargs.get("download_and_prepare", True):
         builder.download_and_prepare()
-    examples_per_epoch = builder.info.splits["train"].num_examples
 
     return TfdsSource(
         builder,
         split_map={
             "train": f"train[:{train_percent}%]",
             "validation": f"train[{train_percent}%:]",
-        },
-        examples_per_epoch={
-            "train": int(examples_per_epoch * train_percent / 100),
-            "validation": int(examples_per_epoch * (1 - train_percent / 100)),
         },
         meta=dict(
             num_classes=ncaltech101.NUM_CLASSES, grid_shape=ncaltech101.GRID_SHAPE
@@ -86,17 +76,12 @@ def cifar10_dvs_source(train_percent=90, **kwargs):
     builder = cifar10_dvs.Cifar10DVS()
     if kwargs.get("download_and_prepare", True):
         builder.download_and_prepare()
-    examples_per_epoch = builder.info.splits["train"].num_examples
 
     return TfdsSource(
         builder,
         split_map={
             "train": f"train[:{train_percent}%]",
             "validation": f"train[{train_percent}%:]",
-        },
-        examples_per_epoch={
-            "train": int(examples_per_epoch * train_percent / 100),
-            "validation": int(examples_per_epoch * (1 - train_percent / 100)),
         },
         meta=dict(
             num_classes=cifar10_dvs.NUM_CLASSES, grid_shape=cifar10_dvs.GRID_SHAPE
@@ -112,17 +97,12 @@ def asl_dvs_source(train_percent=80, **kwargs):
     builder = asl_dvs.AslDvs()
     if kwargs.get("download_and_prepare", True):
         builder.download_and_prepare()
-    examples_per_epoch = builder.info.splits["train"].num_examples
 
     return TfdsSource(
         builder,
         split_map={
             "train": f"train[:{train_percent}%]",
             "validation": f"train[{train_percent}%:]",
-        },
-        examples_per_epoch={
-            "train": int(examples_per_epoch * train_percent / 100),
-            "validation": int(examples_per_epoch * (1 - train_percent / 100)),
         },
         meta=dict(num_classes=asl_dvs.NUM_CLASSES, grid_shape=asl_dvs.GRID_SHAPE),
         **kwargs,
@@ -186,11 +166,10 @@ def vis_example(
 
 if __name__ == "__main__":
     source = cifar10_dvs_source()
-    vis_kwargs = {"reverse_xy": True, "flip_up_down": True}
-    # source, vis_kwargs = nmnist_source2(), {}
+    vis_kwargs = {"reverse_xy": False, "flip_up_down": True}
 
     print("number of examples:")
     for split in ("train", "validation"):
-        print("{:20}: {}".format(split, source.examples_per_epoch(split)))
+        print("{:20}: {}".format(split, source.epoch_length(split)))
     for example in source.get_dataset("train"):
         vis_example(example, **vis_kwargs)

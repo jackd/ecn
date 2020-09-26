@@ -17,8 +17,8 @@ aug_source = augment.Augmented2DSource(
     # rotate_limits=(-np.pi, np.pi),  # exaggerate
 )
 for source in (base_source, aug_source):
-    print(source.examples_per_epoch("train"))
-    print(source.examples_per_epoch("validation"))
+    print(source.epoch_length("train"))
+    print(source.epoch_length("validation"))
 
 for example in aug_source.get_dataset("train"):
     sources.vis_example(

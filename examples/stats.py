@@ -6,7 +6,7 @@ from ecn.problems import sources
 
 source = sources.asl_dvs_source()
 
-total = source.examples_per_epoch("train")
+total = source.epoch_length("train")
 
 
 def map_fn(events, labels):
