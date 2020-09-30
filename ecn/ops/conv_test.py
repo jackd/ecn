@@ -134,7 +134,43 @@ class ConvTest(tf.test.TestCase):
         actual, expected = self.evaluate((actual, expected))
         np.testing.assert_allclose(actual, expected, atol=1e-3)
 
+    def test_csr_gradient(self):
+        n_out = 7
+        n_in = 5
+        n_features = 3
+        dense_shape = (n_out, n_in)
+        dense = tf.random.normal(shape=dense_shape, dtype=tf.float32)
+        mask = tf.random.uniform(shape=dense_shape, dtype=tf.float32) > 0.5
+        dense = tf.where(mask, dense, tf.zeros_like(dense))
+        sparse = tf.sparse.from_dense(dense)
+        x = tf.random.normal((n_in, n_features), dtype=tf.float32)
+        vals = sparse.values
+        indices = sparse.indices
+        del sparse
+
+        with tf.GradientTape() as tape:
+            tape.watch(vals)
+            st = tf.SparseTensor(indices, vals, dense_shape)
+            expected_val = tf.sparse.sparse_dense_matmul(st, x)
+            expected_grad = tape.gradient(expected_val, vals)
+
+        with tf.GradientTape() as tape:
+            tape.watch(vals)
+            st = tf.SparseTensor(indices, vals, dense_shape)
+            actual_val = conv.csr_matmul(st, x)
+            # csr = sparse_lib.CSRSparseMatrix(st)
+            # actual_val = sparse_lib.matmul(csr, x)
+            actual_grad = tape.gradient(actual_val, vals)
+
+        np.testing.assert_allclose(
+            expected_val.numpy(),
+            actual_val.numpy(),  # pylint:disable=no-member
+            rtol=1e-5,
+        )
+        np.testing.assert_allclose(
+            expected_grad.numpy(), actual_grad.numpy(), rtol=1e-5
+        )
+
 
 if __name__ == "__main__":
     tf.test.main()
-    # ConvTest().test_binary_temporal_conv()

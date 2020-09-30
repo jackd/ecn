@@ -36,7 +36,7 @@ def build_fn(features, labels, weights=None):
     return out, (), ()
 
 
-built = mg.build_multi_graph(build_fn, source.example_spec, batch_size=batch_size)
+built = mg.build_multi_graph(build_fn, source.element_spec, batch_size=batch_size)
 
 dataset = source.get_dataset("train")
 dataset = (

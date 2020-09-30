@@ -5,13 +5,13 @@ import numpy as np
 import tensorflow as tf
 
 import ecn.pub_sub as ps
+import kblocks.multi_graph as mg
 import kblocks.ops.sparse as sparse_ops
 from ecn.layers import conv as conv_layers
 from ecn.ops import grid as grid_ops
 from ecn.ops import neighbors as neigh_ops
 from ecn.ops import ragged as ragged_ops
 from ecn.ops import spike as spike_ops
-from kblocks import multi_graph as mg
 from kblocks.extras.layers import ragged as ragged_layers
 from kblocks.extras.layers import shape as shape_layers
 from kblocks.keras import layers
@@ -1148,7 +1148,7 @@ def spike_threshold(
     decay_time: int,
     threshold: float = 1.0,
     reset_potential: float = -1.0,
-    bucket_sizes: bool = True,
+    bucket_sizes: bool = False,
     min_mean_size: Optional[int] = None,
 ) -> SpatialStream:
     assert stream.grid == link.in_grid
@@ -1177,7 +1177,7 @@ def global_spike_threshold(
     decay_time: int,
     threshold: float = 1.0,
     reset_potential: float = -1,
-    bucket_sizes: bool = True,
+    bucket_sizes: bool = False,
     min_mean_size: Optional[int] = None,
 ) -> Stream:
     with mg.pre_cache_context():

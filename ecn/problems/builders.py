@@ -1,12 +1,12 @@
 from typing import Sequence
 
 import gin
-import kblocks.multi_graph as mg
 import numpy as np
 import tensorflow as tf
-from kblocks.keras import layers
 
+import kblocks.multi_graph as mg
 from ecn import components as comp
+from kblocks.keras import layers
 
 Lambda = tf.keras.layers.Lambda
 

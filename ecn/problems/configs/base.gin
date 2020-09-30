@@ -1,9 +1,9 @@
-import kblocks.path
-import kblocks.framework.pipelines
-import kblocks.keras.optimizers
-import kblocks.framework.cache
-import kblocks.framework.cache.tfrecords
+import ecn.layers.conv
 import ecn.problems.utils
+import kblocks.extras.cache
+import kblocks.extras.cache.tfrecords
+import kblocks.keras.optimizers
+import kblocks.path
 
 trainable = @ecn.utils.multi_graph_trainable()
 ecn.utils.multi_graph_trainable.build_fn = %build_fn
@@ -20,13 +20,23 @@ kb.path.model_dir.model_id = %model_id
 kb.path.model_dir.variant_id = %variant_id
 kb.path.model_dir.run = %run
 
-kb.framework.BasePipeline.clear_cache = %clear_cache
-kb.framework.BasePipeline.cache_managers = @kb.framework.cache_managers()
-kb.framework.BasePipeline.shuffle_buffer = %shuffle_buffer
-kb.framework.BaseCacheManager.preprocess = True
-kb.framework.cache_managers.root_dir = @cache/kb.path.model_dir()
-kb.framework.cache_managers.train_impl = @TFRecordsCacheManager
-kb.framework.cache_managers.validation_impl = @TFRecordsCacheManager
+ecn.layers.SpatioTemporalEventConv.use_csr = %use_csr
+ecn.layers.TemporalEventConv.use_csr = %use_csr
+
+use_csr = False
+
+# HACK
+# kb.framework.BasePipeline.clear_cache = %clear_cache
+# kb.framework.BasePipeline.cache_managers = @kb.cache.cache_managers()
+# kb.framework.BasePipeline.shuffle_buffer = %shuffle_buffer
+kb.framework.PipelinedSource.clear_cache = %clear_cache
+kb.framework.PipelinedSource.cache_managers = @kb.cache.cache_managers()
+kb.framework.PipelinedSource.shuffle_buffer = %shuffle_buffer
+kb.cache.BaseCacheManager.preprocess = True
+kb.cache.cache_managers.root_dir = @cache/kb.path.model_dir()
+kb.cache.cache_managers.train_impl = @TFRecordsCacheManager
+kb.cache.cache_managers.validation_impl = @TFRecordsCacheManager
+kb.cache.TFRecordsCacheManager.compression = 'GZIP'
 cache/kb.path.model_dir.run = None
 cache/kb.path.model_dir.variant_id = 'cache'
 

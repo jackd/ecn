@@ -11,6 +11,11 @@ from ecn import components as comp
 from kblocks.framework.sources import DataSource, PipelinedSource, RectBatcher
 from kblocks.framework.trainable import Trainable
 
+# from kblocks.framework.sources import DataSource, PipelinedSource
+
+
+# from kblocks.framework.pipelines import BasePipeline  # HACK
+
 # from ecn import multi_graph as mg
 
 losses = tf.keras.losses
@@ -114,13 +119,14 @@ def multi_graph_trainable(
     logging.info("Building multi graph...")
     built = mg.build_multi_graph(
         functools.partial(build_fn, **base_source.meta),
-        base_source.example_spec,
+        base_source.element_spec,
         batch_size,
     )
 
     logging.info("Successfully built!")
 
     source = PipelinedSource(
+        base_source,
         batcher=RectBatcher(batch_size),
         pre_cache_map=built.pre_cache_map,
         pre_batch_map=built.pre_batch_map,
@@ -152,7 +158,7 @@ def vis_streams(
     with builder:
         with comp.stream_accumulator() as streams:
             inputs = tf.nest.map_structure(
-                builder.pre_cache_input, base_source.example_spec
+                builder.pre_cache_input, base_source.element_spec
             )
             logging.info("Building multi graph...")
             build_fn(*inputs, **base_source.meta)
@@ -247,7 +253,7 @@ def vis_streams1d(build_fn, base_source: DataSource):
     with builder:
         with comp.stream_accumulator() as streams:
             inputs = tf.nest.map_structure(
-                builder.pre_cache_input, base_source.example_spec
+                builder.pre_cache_input, base_source.element_spec
             )
             logging.info("Building multi graph...")
             build_fn(*inputs, **base_source.meta)
@@ -327,7 +333,7 @@ def vis_adjacency(build_fn, base_source: DataSource):
         with comp.stream_accumulator() as streams:
             with comp.convolver_accumulator() as convolvers:
                 inputs = tf.nest.map_structure(
-                    builder.pre_cache_input, base_source.example_spec
+                    builder.pre_cache_input, base_source.element_spec
                 )
                 logging.info("Building multi graph...")
                 build_fn(*inputs, **base_source.meta)

@@ -7,8 +7,8 @@ inception_vox_pooling.num_levels = 3
 inception_vox_pooling.vox_start = 0
 inception_vox_pooling.filters0 = 32
 
-kb.framework.cache_managers.train_impl = @BaseCacheManager
-kb.framework.cache_managers.validation_impl = @BaseCacheManager
+kb.cache.cache_managers.train_impl = @BaseCacheManager
+kb.cache.cache_managers.validation_impl = @BaseCacheManager
 BaseCacheManager.preprocess = False
 
 inception_vox_pooling.vox_reduction = 'max'

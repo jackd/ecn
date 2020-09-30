@@ -79,6 +79,8 @@ def min_on_leading_axis(x: np.ndarray):
 def merge(
     times0: IntArray, coords0: IntArray, times1: IntArray, coords1: IntArray
 ) -> Tuple[IntArray, IntArray]:
+    assert len(times0) == len(coords0)
+    assert len(times1) == len(coords1)
     total = times0.size + times1.size
     i0 = 0
     i1 = 0
@@ -91,12 +93,22 @@ def merge(
             out_times[i] = t1
             out_coords[i] = coords1[i1]
             i1 += 1
-            t1 = times1[i1]
+            if i1 < len(times1):
+                t1 = times1[i1]
+            else:
+                out_times[i + 1 :] = times0[i0:]
+                out_coords[i + 1 :] = coords0[i0:]
+                break
         else:
             out_times[i] = t0
             out_coords[i] = coords0[i0]
             i0 += 1
-            t0 = times0[i0]
+            if i0 < len(times0):
+                t0 = times0[i0]
+            else:
+                out_times[i + 1 :] = times1[i1:]
+                out_coords[i + 1 :] = coords1[i1:]
+                break
     return out_times, out_coords
 
 

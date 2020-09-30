@@ -39,4 +39,3 @@ class SpikeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-    # SpikeTest().test_spike()

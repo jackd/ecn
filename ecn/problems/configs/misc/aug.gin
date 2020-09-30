@@ -1,10 +1,10 @@
-import kblocks.framework.cache
 import ecn.problems.augment
+import kblocks.extras.cache
 
 base_source = @Augmented2DSource()
 Augmented2DSource.flip_time = 0.5
 
-kb.framework.cache_managers.train_impl = @kb.framework.RepeatCacheManager
+kb.cache.cache_managers.train_impl = @kb.cache.RepeatCacheManager
 
 RepeatCacheManager.manager_impl = @TFRecordsCacheManager
 

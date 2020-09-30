@@ -17,6 +17,10 @@ disable=
     redefined-builtin,
     attribute-defined-outside-init,
     too-many-statements,
+    # tensorflow pylint issues
+    no-value-for-parameter,
+    unexpected-keyword-arg,
+    redundant-keyword-arg,
 
 [format]
 

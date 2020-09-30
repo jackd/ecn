@@ -3,4 +3,4 @@ include 'misc/rlrp.gin'
 
 epochs = 200
 
-variant_id = 'rlrp.gin'
+variant_id = 'rlrp'

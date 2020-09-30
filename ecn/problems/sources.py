@@ -133,10 +133,9 @@ def vis_example(
     flip_up_down=False,
     class_names=None,
 ):
-    from events_tfds.vis.image import as_frame
-    from events_tfds.vis.image import as_frames
     import events_tfds.vis.anim as anim
     import matplotlib.pyplot as plt
+    from events_tfds.vis.image import as_frame, as_frames
 
     features, label = example
     coords = features["coords"]
@@ -166,7 +165,7 @@ def vis_example(
 
 if __name__ == "__main__":
     source = cifar10_dvs_source()
-    vis_kwargs = {"reverse_xy": False, "flip_up_down": True}
+    vis_kwargs = {"reverse_xy": True, "flip_up_down": False}
 
     print("number of examples:")
     for split in ("train", "validation"):

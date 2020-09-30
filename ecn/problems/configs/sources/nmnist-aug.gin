@@ -4,6 +4,6 @@ import ecn.problems.sources
 include 'nmnist.gin'
 include '../misc/aug.gin'
 
-Augmented2DSource.base_source = @nmnist_source()
+Augmented2DSource.base = @nmnist_source()
 
 problem_id = 'nmnist-aug'

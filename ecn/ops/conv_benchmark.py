@@ -8,6 +8,7 @@ flags.DEFINE_boolean("sort", default=False, help="use sorted indices")
 flags.DEFINE_boolean(
     "backward", default=False, help="benchmark forward and backward pass"
 )
+flags.DEFINE_boolean("csr", default=False, help="use csr implementation")
 flags.DEFINE_integer("burn_iters", default=10, help="number of burn in iterations")
 flags.DEFINE_integer("ni", default=100000, help="number of input events")
 flags.DEFINE_integer(
@@ -39,6 +40,8 @@ def summarize(result, print_fn=print):
 
 
 def get_kwargs():
+    if FLAGS.csr and not FLAGS.sort:
+        raise ValueError("sort must be True if csr is True")
     n_in = FLAGS.ni
     n_out = FLAGS.no
     if n_out == -1:
@@ -53,7 +56,7 @@ def get_kwargs():
     sk = FLAGS.sk
 
     features = tf.random.normal((n_in, f_in))
-    dt_values = tf.random.uniform((E,),)
+    dt_values = tf.random.uniform((E,), dtype=tf.float32)
     i = tf.random.uniform((E,), maxval=n_out, dtype=tf.int64)
     s = tf.sort(tf.random.uniform((E,), maxval=sk, dtype=tf.int64))
     j = tf.random.uniform((E,), maxval=n_in, dtype=tf.int64)
@@ -77,10 +80,12 @@ def get_kwargs():
     kernel = tf.transpose(kernel, (1, 0, 2, 3))
     decay = tf.transpose(decay, (1, 0))
     v1_kwargs = dict(features=features, dt=dt, kernel=kernel, decay=decay)
+    for kwargs in v1_kwargs, v2_kwargs:
+        kwargs["use_csr"] = FLAGS.csr
     return v1_kwargs, v2_kwargs
 
 
-def v1_train_op(features, dt, kernel, decay):
+def v1_train_op(features, dt, kernel, decay, use_csr: bool):
     features = tf.constant(features.numpy())
     dt = [
         tf.SparseTensor(d.indices.numpy(), d.values.numpy(), d.dense_shape.numpy())
@@ -91,14 +96,15 @@ def v1_train_op(features, dt, kernel, decay):
         decay = tf.Variable(decay.numpy())
         tape.watch(kernel)
         tape.watch(decay)
-        out = conv.spatio_temporal_event_conv(features, dt, kernel, decay)
+        forward = conv.spatio_temporal_event_conv(
+            features, dt, kernel, decay, use_csr=use_csr
+        )
     if FLAGS.backward:
-        return tape.gradient(out, (kernel, decay))
-    else:
-        return out
+        return tape.gradient(forward, (kernel, decay))
+    return forward
 
 
-def v2_train_op(features, dt, kernel, decay):
+def v2_train_op(features, dt, kernel, decay, use_csr: bool):
     features = tf.constant(features.numpy())
     dt = tf.SparseTensor(dt.indices.numpy(), dt.values.numpy(), dt.dense_shape.numpy())
     with tf.GradientTape() as tape:
@@ -106,16 +112,18 @@ def v2_train_op(features, dt, kernel, decay):
         decay = tf.Variable(decay.numpy())
         tape.watch(kernel)
         tape.watch(decay)
-        out = conv_v2.spatio_temporal_event_conv(features, dt, kernel, decay)
+        out = conv_v2.spatio_temporal_event_conv(
+            features, dt, kernel, decay, use_csr=use_csr
+        )
     if FLAGS.backward:
         return tape.gradient(out, (kernel, decay))
-    else:
-        return out
+    return out
 
 
 def main(_):
     tf.config.optimizer.set_jit(FLAGS.jit)
     bm = tf.test.Benchmark()
+    bm_kwargs = dict(burn_iters=FLAGS.burn_iters, min_iters=FLAGS.min_iters)
     v1_kwargs, v2_kwargs = get_kwargs()
     with tf.Graph().as_default():
         v1_op = v1_train_op(**v1_kwargs)
@@ -126,13 +134,9 @@ def main(_):
             sess.run(tf.compat.v1.global_variables_initializer())
 
             logging.info("Starting v1 benchmarking...")
-            v1_result = bm.run_op_benchmark(
-                sess, v1_op, burn_iters=FLAGS.burn_iters, min_iters=FLAGS.min_iters
-            )
+            v1_result = bm.run_op_benchmark(sess, v1_op, **bm_kwargs)
             logging.info("Starting v2 benchmarking...")
-            v2_result = bm.run_op_benchmark(
-                sess, v2_op, burn_iters=FLAGS.burn_iters, min_iters=FLAGS.min_iters
-            )
+            v2_result = bm.run_op_benchmark(sess, v2_op, **bm_kwargs)
     print("v1")
     summarize(v1_result)
     print("v2")

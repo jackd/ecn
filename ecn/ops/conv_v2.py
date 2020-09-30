@@ -6,12 +6,17 @@ FloatTensor = tf.Tensor
 
 as_complex = _base_ops.as_complex
 sparse_dense_matmul = _base_ops.sparse_dense_matmul
-_validate_dtype = _base_ops._validate_dtype
+_validate_dtype = _base_ops._validate_dtype  # pylint: disable=protected-access
 
 temporal_event_conv = _base_ops.temporal_event_conv
 
 
-def spatial_event_conv(features: FloatTensor, sp: tf.SparseTensor, kernel: FloatTensor):
+def spatial_event_conv(
+    features: FloatTensor,
+    sp: tf.SparseTensor,
+    kernel: FloatTensor,
+    use_csr: bool = False,
+):
     """
     Spatial event convolution.
 
@@ -32,7 +37,10 @@ def spatial_event_conv(features: FloatTensor, sp: tf.SparseTensor, kernel: Float
     assert features.shape[1] == f_in
     n_out = -1
 
-    x = tf.sparse.sparse_dense_matmul(sp, features)
+    if use_csr:
+        x = _base_ops.csr_matmul(sp, features)
+    else:
+        x = tf.sparse.sparse_dense_matmul(sp, features)
     x = tf.reshape(x, (n_out, sk * f_in))
     kernel = tf.reshape(kernel, (sk * f_in, f_out))
     x = tf.matmul(x, kernel)
@@ -40,7 +48,11 @@ def spatial_event_conv(features: FloatTensor, sp: tf.SparseTensor, kernel: Float
 
 
 def spatio_temporal_event_conv(
-    features: FloatTensor, dt: tf.SparseTensor, kernel: FloatTensor, decay: FloatTensor
+    features: FloatTensor,
+    dt: tf.SparseTensor,
+    kernel: FloatTensor,
+    decay: FloatTensor,
+    use_csr: bool = False,
 ) -> FloatTensor:
     """
     Event convolution.
@@ -93,6 +105,6 @@ def spatio_temporal_event_conv(
     terms = []
     for k, v in zip(kernels, values):
         sp = tf.SparseTensor(dt.indices, v, dt.dense_shape)
-        terms.append(spatial_event_conv(features, sp, k))
+        terms.append(spatial_event_conv(features, sp, k, use_csr=use_csr))
 
     return tf.add_n(terms)

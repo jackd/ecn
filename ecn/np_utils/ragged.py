@@ -74,10 +74,11 @@ def row(values, splits, row_index) -> IntArray:
 #         s0 = s
 
 
-@nb.njit(inline="always", parallel=PARALLEL)
+# @nb.njit(inline="always", parallel=PARALLEL)
+@nb.njit(inline="always")
 def col_sort(values, splits) -> None:
-    # for i in nb.prange(splits.size - 1):  # pylint: disable=not-an-iterable
     for i in range(splits.size - 1):
+        # for i in nb.prange(splits.size - 1):  # pylint: disable=not-an-iterable
         row(values, splits, i).sort()
 
 

@@ -143,16 +143,17 @@ def augment(
 if __name__ == "__main__":
     from ecn.problems import sources
 
-    source = sources.nmnist_source()
+    # source = sources.nmnist_source()
+    source = sources.cifar10_dvs_source()
     grid_shape = source.meta["grid_shape"]
-    for features, label in source.get_dataset("train"):
+    for features, label in source.get_dataset("validation"):
         sources.vis_example((features, label))
         time, coords, polarity, _ = augment(
             features["time"],
             features["coords"],
             features["polarity"],
             grid_shape=grid_shape,
-            flip_time=True,
+            flip_ud=True,
         )
         features = dict(time=time, coords=coords, polarity=polarity)
-        sources.vis_example((features, label))
+        sources.vis_example((features, label), reverse_xy=True)

@@ -4,6 +4,24 @@ import tensorflow as tf
 
 import kblocks.ops.sparse as sparse_ops
 
+# @tf.RegisterGradient("SparseTensorToCSRSparseMatrix")
+# def _SparseTensorToCSRSparseMatrixGrad(op, grad):
+#     """Gradient for sparse_tensor_to_csr_sparse_matrix op."""
+#     # NOTE: both these return dense gradients...
+#     _, values, dense_shape = sparse_lib.csr_sparse_matrix_to_sparse_tensor(
+#         grad, type=op.get_attr("T")
+#     )
+
+#     # row_ptrs, col_inds, values = sparse_lib.csr_sparse_matrix_components(
+#     #     grad, index=tf.zeros((), dtype=tf.int32), type=op.get_attr("T")
+#     # )
+
+#     i, j = tf.unstack(op.inputs[0], axis=-1)
+#     flat_indices = i * dense_shape[1] + j
+#     values = tf.gather(values, flat_indices, axis=0)
+#     return (None, values, None)
+
+
 BoolTensor = tf.Tensor
 IntTensor = tf.Tensor
 FloatTensor = tf.Tensor
@@ -67,12 +85,32 @@ def complex_split(x):
     raise TypeError(f"Unrecognized tensor type for x, {x}")
 
 
-def csr_matmul(sp_a: tf.SparseTensor, b: tf.Tensor):
-    from tensorflow.python.ops.linalg.sparse import (  # pylint: disable=import-outside-toplevel
-        sparse as sparse_lib,
-    )
+@tf.custom_gradient
+def _csr_matmul(indices: tf.Tensor, values: tf.Tensor, dense_shape, b: tf.Tensor):
+    try:
+        from tensorflow.python.ops.linalg.sparse import (  # pylint: disable=import-outside-toplevel
+            sparse as sparse_lib,
+        )
+    except ImportError as e:
+        raise ImportError("use_csr requires tensorflow >= 2.3") from e
+    st = tf.SparseTensor(indices, values, dense_shape)
+    csr_m = sparse_lib.CSRSparseMatrix(st)
+    out = sparse_lib.matmul(csr_m, b)
 
-    return sparse_lib.matmul(sparse_lib.CSRSparseMatrix(sp_a), b)
+    def grad(dy):
+        rows, cols = tf.unstack(indices, axis=-1)
+        parts_a = tf.gather(dy, rows, axis=0)
+        parts_b = tf.gather(b, cols, axis=0)
+
+        a_values_grad = tf.math.reduce_sum(parts_a * parts_b, axis=1)
+        b_grad = sparse_lib.matmul(csr_m, dy, adjoint_a=True)
+        return (None, a_values_grad, None, b_grad)
+
+    return out, grad
+
+
+def csr_matmul(sp_a: tf.SparseTensor, b: tf.Tensor) -> tf.Tensor:
+    return _csr_matmul(sp_a.indices, sp_a.values, sp_a.dense_shape, b)
 
 
 def sparse_dense_matmul(sp_a: tf.SparseTensor, b: tf.Tensor, use_csr: bool = False):

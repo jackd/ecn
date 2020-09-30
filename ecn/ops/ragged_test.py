@@ -22,7 +22,9 @@ class RaggedOpsTest(tf.test.TestCase):
         i = [0, 1, 1, 2, 2, 2, 3, 5]
         j = [1, 0, 2, 1, 2, 3, 1, 4]
         values = tf.range(8)
-        splits = ragged.ids_to_splits(i)
+        splits = tf.ragged.segment_ids_to_row_splits(i)
+
+        np.testing.assert_equal(splits.numpy(), [0, 1, 3, 6, 7, 7, 8])
 
         actual_indices, actual_splits, actual_values = self.evaluate(
             ragged.transpose_csr(j, splits, values)

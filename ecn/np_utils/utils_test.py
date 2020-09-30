@@ -1,3 +1,7 @@
+# import os
+
+# os.environ["NUMBA_DISABLE_JIT"] = "1"
+
 import unittest
 
 import numpy as np
@@ -42,21 +46,21 @@ class UtilsTest(unittest.TestCase):
 
         np.testing.assert_allclose(actual, expected)
 
-    def test_iter_product(self):
-        from itertools import product
+    # def test_iter_product(self):
+    #     from itertools import product
 
-        iterables = np.arange(3), np.arange(5)
-        actual = list(utils.iter_product(*iterables))
-        expected = list(product(*iterables))
-        np.testing.assert_allclose(actual, expected)
+    #     iterables = np.arange(3), np.arange(5)
+    #     actual = list(utils.iter_product(*iterables))
+    #     expected = list(product(*iterables))
+    #     np.testing.assert_allclose(actual, expected)
 
-    def test_iter_product_array(self):
-        iterables = np.arange(3), np.arange(5)
-        expected = np.stack(np.meshgrid(*iterables, indexing="ij"), axis=-1).reshape(
-            (-1, 2)
-        )
-        actual = utils.iter_product_array(np.arange(3), np.arange(5))
-        np.testing.assert_allclose(actual, expected)
+    # def test_iter_product_array(self):
+    #     iterables = np.arange(3), np.arange(5)
+    #     expected = np.stack(np.meshgrid(*iterables, indexing="ij"), axis=-1).reshape(
+    #         (-1, 2)
+    #     )
+    #     actual = utils.iter_product_array(np.arange(3), np.arange(5))
+    #     np.testing.assert_allclose(actual, expected)
 
     def test_merge(self):
         t0 = np.array([0, 5, 10, 15, 20], dtype=np.int64)
@@ -64,11 +68,17 @@ class UtilsTest(unittest.TestCase):
         t1 = np.array([1, 2, 6, 12])
         c1 = -np.expand_dims(t1, axis=-1)
 
+        expected_t = [0, 1, 2, 5, 6, 10, 12, 15, 20]
+        expected_c = np.expand_dims([0, -1, -2, 10, -6, 20, -12, 30, 40], axis=-1)
+
         actual_t, actual_c = utils.merge(t0, c0, t1, c1)
-        np.testing.assert_equal(actual_t, [0, 1, 2, 5, 6, 10, 12, 15, 20])
-        np.testing.assert_equal(
-            actual_c, np.expand_dims([0, -1, -2, 10, -6, 20, -12, 30, 40], axis=-1)
-        )
+        np.testing.assert_equal(actual_t, expected_t)
+        np.testing.assert_equal(actual_c, expected_c)
+
+        # should be commutative if there are not duplicates
+        actual_t, actual_c = utils.merge(t1, c1, t0, c0)
+        np.testing.assert_equal(actual_t, expected_t)
+        np.testing.assert_equal(actual_c, expected_c)
 
     def test_prod(self):
         x = np.random.uniform(size=(10,))
@@ -78,5 +88,4 @@ class UtilsTest(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    # NeighborsTest().test_ravel_multi_index()
     unittest.main()

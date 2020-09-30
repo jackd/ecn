@@ -240,11 +240,13 @@ class SpatioTemporalEventConv(EventConvBase):
         temporal_kernel_size: int,
         spatial_kernel_size: Optional[int] = None,
         combine: str = "unstack",
+        use_csr: bool = False,
         **kwargs,
     ):
         if spatial_kernel_size is not None:
             spatial_kernel_size = int(spatial_kernel_size)
         self.combine = combine
+        self.use_csr = use_csr
         self.spatial_kernel_size = spatial_kernel_size
         super(SpatioTemporalEventConv, self).__init__(
             filters, temporal_kernel_size, **kwargs
@@ -289,8 +291,13 @@ class SpatioTemporalEventConv(EventConvBase):
 
     def get_config(self):
         config = super(SpatioTemporalEventConv, self).get_config()
-        config["spatial_kernel_size"] = self.spatial_kernel_size
-        config["combine"] = self.combine
+        config.update(
+            dict(
+                spatial_kernel_size=self.spatial_kernel_size,
+                combine=self.combine,
+                use_csr=self.use_csr,
+            )
+        )
         return config
 
     def call(self, inputs):
@@ -303,6 +310,7 @@ class SpatioTemporalEventConv(EventConvBase):
             kernel=self.kernel,
             decay=self.decay,
             combine=self.combine,
+            use_csr=self.use_csr,
         )
         return self._finalize(features)
 
@@ -382,13 +390,16 @@ class BinaryTemporalEventConv(EventConvBase):
 
 @gin.configurable(module="ecn.layers")
 class TemporalEventConv(EventConvBase):
-    def __init__(self, *args, **kwargs):
-        self.combine = kwargs.pop("combine", "unstack")
+    def __init__(
+        self, *args, combine: str = "unstack", use_csr: bool = False, **kwargs
+    ):
+        self.combine = combine
+        self.use_csr = use_csr
         super().__init__(*args, **kwargs)
 
     def get_config(self):
         config = super().get_config()
-        config["combine"] = self.combine
+        config.update(dict(combine=self.combine, use_csr=self.use_csr))
         return config
 
     def _kernel_shape(self, input_shape):
@@ -406,6 +417,7 @@ class TemporalEventConv(EventConvBase):
             kernel=self.kernel,
             decay=self.decay,
             combine=self.combine,
+            use_csr=self.use_csr,
         )
         return self._finalize(features)
 

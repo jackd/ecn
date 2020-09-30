@@ -1,9 +1,10 @@
 import ecn.problems.augment
 import ecn.problems.sources
+
 include 'cifar10.gin'
 include '../misc/aug.gin'
 
-Augmented2DSource.base_source = @cifar10_dvs_source()
-Augmented2DSource.flip_ud = 0.5  # cifar10 has xy reversed, so this is really lr
+Augmented2DSource.base = @cifar10_dvs_source()
+Augmented2DSource.flip_ud = 0.5  # this is really flip_lr
 
 problem_id = 'cifar10-aug'

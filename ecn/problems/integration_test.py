@@ -1,6 +1,4 @@
-# import os
-# os.environ['NUMBA_DISABLE_JIT'] = '1'
-
+"""Tests of pipelined source + model. These take a while."""
 import functools
 
 import numpy as np
@@ -9,34 +7,18 @@ import tensorflow as tf
 import ecn.problems.builders as builders
 import ecn.problems.sources as sources
 import ecn.problems.utils as utils
-from kblocks.framework.sources import DataSource, Split
+from kblocks.framework.sources import DataSource, DelegatingSource, Split
 
 Lambda = tf.keras.layers.Lambda
 
 
-class DeterministicSource(DataSource):
+class DeterministicSource(DelegatingSource):
     def __init__(self, base: DataSource, num_examples=2):
-        self._data = {}
-        for split in ("train", "validation"):
-            out = []
-            for example in base.get_dataset(split).take(num_examples):
-                out.append(tf.nest.map_structure(lambda x: x.numpy(), example))
-            self._data[split] = tuple(out)
+        super().__init__(base=base)
         self._num_examples = num_examples
-        self._element_spec = base.element_spec
 
     def get_dataset(self, split: Split) -> tf.data.Dataset:
-        data = self._data.get(split)
-        spec = self.element_spec
-        return tf.data.Dataset.from_generator(
-            lambda: data,
-            tf.nest.map_structure(lambda x: x.dtype, spec),
-            tf.nest.map_structure(lambda x: x.shape, spec),
-        )
-
-    @property
-    def element_spec(self):
-        return self._element_spec
+        return super().get_dataset(split).take(self._num_examples)
 
     def epoch_length(self, split: Split) -> int:
         return self._num_examples
@@ -47,10 +29,10 @@ class IntegrationTest(tf.test.TestCase):
         source = DeterministicSource(base_source, num_examples=2)
 
         single = utils.multi_graph_trainable(
-            build_fn, source, 1, cache_managers=None, repeats=-1, compiler=None
+            build_fn, source, 1, cache_managers=None, repeats=1, compiler=None
         )
         double = utils.multi_graph_trainable(
-            build_fn, source, 2, cache_managers=None, repeats=-1, compiler=None
+            build_fn, source, 2, cache_managers=None, repeats=1, compiler=None
         )
         model = single.model
         outs_single = []
@@ -61,7 +43,7 @@ class IntegrationTest(tf.test.TestCase):
                 outs_single.append(model(features))
                 labels_single.append(labels)
                 weights_single.append(weights)
-
+            assert len(outs_single) == 2
             outs_single = tf.nest.map_structure(
                 lambda *args: tf.concat(args, axis=0).numpy(), *outs_single
             )
@@ -85,14 +67,13 @@ class IntegrationTest(tf.test.TestCase):
         assert_allclose = functools.partial(
             np.testing.assert_allclose, rtol=1e-4, atol=1e-4
         )
-        tf.nest.map_structure(assert_allclose, outs_single, outs_double)
         tf.nest.map_structure(assert_allclose, labels_single, labels_double)
-
         # stream weights are divided by batch size
         assert_allclose(weights_double["stream"] * 2, weights_single["stream"])
+        tf.nest.map_structure(assert_allclose, outs_single, outs_double)
 
     def test_simple_multi_graph(self):
-        base_source = sources.nmnist_source()
+        base_source = sources.nmnist_source(shuffle_files=False)
         build_fn = functools.partial(
             builders.simple_multi_graph,
             hidden_units=(16,),
@@ -100,11 +81,10 @@ class IntegrationTest(tf.test.TestCase):
             kt0=2,
             static_sizes=False,
         )
-
         self._test_batched_trainable(base_source, build_fn)
 
     def test_inception(self):
-        base_source = sources.nmnist_source()
+        base_source = sources.nmnist_source(shuffle_files=False)
         build_fn = functools.partial(
             builders.inception_multi_graph,
             hidden_units=(16,),

@@ -1,7 +1,7 @@
 include 'ncars.gin'
 include '../misc/aug-inf.gin'
 
-Augmented2DSource.base_source = @ncars_source()
+Augmented2DSource.base = @ncars_source()
 Augmented2DSource.flip_ud = 0.5  # ncars has xy reversed, so this is really lr
 Augmented2DSource.flip_time = False
 

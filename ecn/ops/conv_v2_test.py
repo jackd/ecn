@@ -15,7 +15,7 @@ class ConvOpsV2Test(tf.test.TestCase):
         E = 51
 
         features = tf.random.normal((n_in, f_in))
-        dt_values = tf.random.uniform((E,),)
+        dt_values = tf.random.uniform((E,), dtype=tf.float32)
         i = tf.random.uniform((E,), maxval=n_out, dtype=tf.int64)
         s = tf.sort(tf.random.uniform((E,), maxval=sk, dtype=tf.int64))
         j = tf.random.uniform((E,), maxval=n_in, dtype=tf.int64)
@@ -42,6 +42,4 @@ class ConvOpsV2Test(tf.test.TestCase):
 
 
 if __name__ == "__main__":
-    # tf.test.main()
-
-    ConvOpsV2Test().test_spatio_temporal_event_conv()
+    tf.test.main()

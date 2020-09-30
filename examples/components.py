@@ -8,9 +8,9 @@ from scipy.sparse import coo_matrix
 
 import events_tfds.vis.anim as anim
 from ecn import components as comp
-from ecn.multi_graph import DebugBuilderContext
 from events_tfds.events.nmnist import GRID_SHAPE, NMNIST
 from events_tfds.vis.image import as_frames
+from kblocks.multi_graph import DebugBuilderContext
 
 
 def vis_adjacency(convolver: comp.Convolver):
