@@ -4,7 +4,7 @@ import gin
 import numpy as np
 import tensorflow as tf
 
-import kblocks.multi_graph as mg
+import multi_graph as mg
 from ecn import components as comp
 from kblocks.keras import layers
 

@@ -5,8 +5,8 @@ import numpy as np
 import tensorflow as tf
 
 import ecn.pub_sub as ps
-import kblocks.multi_graph as mg
 import kblocks.ops.sparse as sparse_ops
+import multi_graph as mg
 from ecn.layers import conv as conv_layers
 from ecn.ops import grid as grid_ops
 from ecn.ops import neighbors as neigh_ops

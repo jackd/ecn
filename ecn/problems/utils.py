@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 from absl import logging
 
-import kblocks.multi_graph as mg
+import multi_graph as mg
 from ecn import components as comp
 from kblocks.framework.sources import DataSource, PipelinedSource, RectBatcher
 from kblocks.framework.trainable import Trainable

@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 import ecn.components as comp
-import kblocks.multi_graph as mg
+import multi_graph as mg
 
 Lambda = tf.keras.layers.Lambda
 
