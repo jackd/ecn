@@ -1,5 +1,6 @@
 import numba as nb
 import numpy as np
+
 import ecn.np_utils.grid as grid
 from ecn.benchmark_utils import benchmark, run_benchmarks
 
