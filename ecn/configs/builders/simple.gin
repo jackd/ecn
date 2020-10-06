@@ -1,4 +1,5 @@
 import ecn.problems.builders
+
 include '../misc/l2_reg.gin'
 build_fn = @ecn.builders.simple_multi_graph
 ecn.builders.simple_multi_graph.activation = %activation

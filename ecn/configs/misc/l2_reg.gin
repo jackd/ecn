@@ -1,6 +1,6 @@
+import ecn.layers.conv
 import kblocks.keras.layers
 import kblocks.keras.regularizers
-import ecn.layers.conv
 
 tf.keras.layers.Dense.kernel_regularizer = %l2_reg
 tf.keras.layers.Conv3D.kernel_regularizer = %l2_reg

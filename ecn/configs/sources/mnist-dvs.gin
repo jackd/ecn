@@ -1,4 +1,5 @@
 import ecn.problems.sources
+
 base_source = @mnist_dvs_source()
 batch_size = 32
 epochs = 100

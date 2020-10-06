@@ -1,4 +1,5 @@
 import ecn.problems.builders
+
 build_fn = @ecn.builders.inception_multi_graph_v2
 
 ecn.builders.inception_multi_graph_v2.decay_time = %decay_time

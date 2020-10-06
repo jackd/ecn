@@ -1,8 +1,10 @@
 import ecn.problems.builders
 import ecn.problems.utils
-build_fn = @ecn.builders.inception_pooling
+
+build_fn = @ecn.builders.inception_vox_pooling
 include '../misc/l2_reg.gin'
 
 compiler = @ecn.utils.compile_classifier
+inception_vox_pooling.bucket_sizes = %bucket_sizes
 
-model_id = 'inception-pooling'
+model_id = 'vox-pool'
