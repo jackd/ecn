@@ -88,8 +88,8 @@ def complex_split(x):
 @tf.custom_gradient
 def _csr_matmul(indices: tf.Tensor, values: tf.Tensor, dense_shape, b: tf.Tensor):
     try:
-        from tensorflow.python.ops.linalg.sparse import (
-            sparse as sparse_lib,  # pylint: disable=import-outside-toplevel
+        from tensorflow.python.ops.linalg.sparse import (  # pylint: disable=import-outside-toplevel
+            sparse as sparse_lib,
         )
     except ImportError as e:
         raise ImportError("use_csr requires tensorflow >= 2.3") from e

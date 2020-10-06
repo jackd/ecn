@@ -117,13 +117,11 @@ SPIKE_KWARGS = dict(reset_potential=-2.0, threshold=1.1)
 
 
 def process_example(events, label):
+    del label
     decay_time = DECAY_TIME
     with DebugBuilderContext():
         coords = events["coords"]
         times = events["time"]
-        events["polarity"]
-        (times[-1] - times[0]).numpy()
-        # print('total time: {}'.format(dt))
         grid = comp.Grid(GRID_SHAPE)
         link = grid.link((3, 3), (1, 1), (0, 0))
 

@@ -151,8 +151,10 @@ def vis_streams(
     group_size=1,
     skip_vis=False,
 ):
-    import events_tfds.vis.anim as anim
-    from events_tfds.vis.image import as_frames
+    import events_tfds.vis.anim as anim  # pylint: disable=import-outside-toplevel
+    from events_tfds.vis.image import (  # pylint: disable=import-outside-toplevel
+        as_frames,
+    )
 
     builder = mg.MultiGraphBuilder(batch_size=1)
     with builder:
