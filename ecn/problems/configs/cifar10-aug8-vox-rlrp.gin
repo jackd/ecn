@@ -1,0 +1,4 @@
+include 'cifar10-aug8-vox.gin'
+include 'misc/rlrp.gin'
+
+variant_id = 'rlrp'
