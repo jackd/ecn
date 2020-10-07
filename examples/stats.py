@@ -10,6 +10,7 @@ total = source.epoch_length("train")
 
 
 def map_fn(events, labels):
+    del labels
     return tf.shape(events["time"])[0]
 
 

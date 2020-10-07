@@ -1,4 +1,4 @@
-from . import augment, conv, conv_v2, grid, neighbors, ragged, spike
+from . import augment, conv, conv_v2, grid, lif, neighbors, ragged
 
 __all__ = [
     "augment",
@@ -7,5 +7,5 @@ __all__ = [
     "grid",
     "neighbors",
     "ragged",
-    "spike",
+    "lif",
 ]

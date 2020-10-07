@@ -2,13 +2,13 @@ from typing import Tuple
 
 import tensorflow as tf
 
-from ecn.ops import spike as _spike_ops
+from ecn.ops import lif as _lif_ops
 
 Lambda = tf.keras.layers.Lambda
 IntTensor = tf.Tensor
 
 
-def global_spike_threshold(
+def leaky_integrate_and_fire(
     times: IntTensor,
     decay_time: int,
     threshold: float = 2.0,
@@ -16,7 +16,7 @@ def global_spike_threshold(
     max_out_events: int = -1,
 ) -> IntTensor:
     return Lambda(
-        _spike_ops.global_spike_threshold,
+        _lif_ops.leaky_integrate_and_fire,
         arguments=dict(
             decay_time=decay_time,
             threshold=threshold,
@@ -26,11 +26,11 @@ def global_spike_threshold(
     )(times)
 
 
-def _spike_threshold(args, **kwargs):
-    return _spike_ops.spike_threshold(*args, **kwargs)
+def _spatial_leaky_integrate_and_fire(args, **kwargs):
+    return _lif_ops.spatial_leaky_integrate_and_fire(*args, **kwargs)
 
 
-def spike_threshold(
+def spatial_leaky_integrate_and_fire(
     times: IntTensor,
     coords: IntTensor,
     grid_indices: IntTensor,
@@ -41,7 +41,7 @@ def spike_threshold(
     out_size: int = -1,
 ) -> Tuple[IntTensor, IntTensor]:
     return Lambda(
-        _spike_threshold,
+        _spatial_leaky_integrate_and_fire,
         arguments=dict(
             decay_time=decay_time,
             threshold=threshold,

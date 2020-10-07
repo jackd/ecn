@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
+import multi_graph as mg
 from ecn import components as comp
-from ecn import multi_graph as mg
 from ecn.problems import sources
 
 Lambda = tf.keras.layers.Lambda
@@ -14,6 +14,7 @@ batch_size = 8
 
 
 def build_fn(features, labels, weights=None):
+    del labels, weights
     times = features["time"]
     coords = features["coords"]
     polarity = features["polarity"]
@@ -47,12 +48,14 @@ dataset = (
 )
 
 model = built.trained_model
+C = 2
+J = 4
 for features, labels, weights in dataset:
     out = model(features).numpy()
 
     for b in range(batch_size):
-        fig, ax = plt.subplots(2, 4)
-        for c in range(2):
-            for j in range(4):
+        fig, ax = plt.subplots(C, J)
+        for c in range(C):
+            for j in range(J):
                 ax[c, j].imshow(out[b, j, :, :, c].T)
         plt.show()

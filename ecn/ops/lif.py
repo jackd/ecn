@@ -3,13 +3,13 @@ from typing import Tuple
 
 import tensorflow as tf
 
-from ecn.np_utils import spike as _np_spike
+from numba_stream import lif as _np_lif
 
 IntTensor = tf.Tensor
 FloatTensor = tf.Tensor
 
 
-def global_spike_threshold(
+def leaky_integrate_and_fire(
     times: IntTensor,
     decay_time: int,
     threshold: float = 1.0,
@@ -18,7 +18,7 @@ def global_spike_threshold(
 ) -> IntTensor:
     out_times = tf.numpy_function(
         functools.partial(
-            _np_spike.global_spike_threshold,
+            _np_lif.leaky_integrate_and_fire,
             max_out_events=max_out_events,
             decay_time=decay_time,
             threshold=threshold,
@@ -31,7 +31,7 @@ def global_spike_threshold(
     return out_times
 
 
-def spike_threshold(
+def spatial_leaky_integrate_and_fire(
     times: IntTensor,
     coords: IntTensor,
     grid_indices: IntTensor,
@@ -44,7 +44,7 @@ def spike_threshold(
 
     out_times, out_coords = tf.numpy_function(
         functools.partial(
-            _np_spike.spike_threshold,
+            _np_lif.spatial_leaky_integrate_and_fire,
             decay_time=decay_time,
             threshold=threshold,
             reset_potential=reset_potential,

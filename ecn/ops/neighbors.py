@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 
 import tensorflow as tf
 
-from ecn.np_utils import neighbors as _np_neigh
+from numba_stream import neighbors as _np_neigh
 
 IntTensor = tf.Tensor
 BoolTensor = tf.Tensor
@@ -36,7 +36,6 @@ def compute_full_neighbors(
     out_times: IntTensor,
     event_duration: int = -1,
     max_neighbors: int = -1,
-    name=None,
 ) -> Tuple[IntTensor, IntTensor, IntTensor]:
     # flatten conv
     partitions, indices, splits = tf.numpy_function(

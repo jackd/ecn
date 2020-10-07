@@ -112,8 +112,8 @@ DECAY_TIME = 10000
 NUM_FRAMES = 20
 FPS = 4
 SPATIAL_BUFFER = 32
-SPIKE_KWARGS = dict(reset_potential=-2.0, threshold=1.1)
-# SPIKE_KWARGS = {}
+LIF_KWARGS = dict(reset_potential=-2.0, threshold=1.1)
+# LIF_KWARGS = {}
 
 
 def process_example(events, label):
@@ -126,8 +126,8 @@ def process_example(events, label):
         link = grid.link((3, 3), (1, 1), (0, 0))
 
         in_stream = comp.SpatialStream(grid, times, coords)
-        out_stream = comp.spike_threshold(
-            in_stream, link, decay_time=decay_time, **SPIKE_KWARGS
+        out_stream = comp.spatial_leaky_integrate_and_fire(
+            in_stream, link, decay_time=decay_time, **LIF_KWARGS
         )
         streams: List[comp.Stream] = [in_stream, out_stream]
 
@@ -157,8 +157,8 @@ def process_example(events, label):
 
             # link = in_stream.grid.link((5, 5), (2, 2), (2, 2))
             link = in_stream.grid.link((3, 3), (2, 2), (1, 1))
-            out_stream = comp.spike_threshold(
-                in_stream, link, decay_time=decay_time, **SPIKE_KWARGS
+            out_stream = comp.spatial_leaky_integrate_and_fire(
+                in_stream, link, decay_time=decay_time, **LIF_KWARGS
             )
             streams.append(out_stream)
 
@@ -174,8 +174,8 @@ def process_example(events, label):
             del out_stream
 
         decay_time *= 2
-        global_stream = comp.global_spike_threshold(
-            in_stream, decay_time=decay_time, **SPIKE_KWARGS
+        global_stream = comp.leaky_integrate_and_fire(
+            in_stream, decay_time=decay_time, **LIF_KWARGS
         )
         streams.append(global_stream)
         decay_time *= 2
@@ -186,63 +186,6 @@ def process_example(events, label):
         convolvers.append([flat_convolver, temporal_convolver])
 
         return tf.stack([tf.size(stream.times) for stream in streams])
-
-        # print('final decay_time: {}'.format(decay_time / dt))
-        # print('{} streams'.format(len(streams)))
-        # print('{} convolver levels'.format(len(convolvers)))
-
-        # for stream in streams:
-        #     print(
-        #         getattr(stream, 'grid').static_shape
-        #         if hasattr(stream, 'grid') else [], stream.times.shape[0])
-        # for convs in convolvers:
-        #     print([None if c is None else c.indices.shape[0] for c in convs])
-
-        # print('Trimming....')
-
-        # uniques = []
-        # riis = []
-
-        # for i in range(len(convolvers) - 1, -1, -1):
-        #     ip_conv, ds_conv = convolvers[i]
-        #     if rii is not None:
-        #         ds_conv = ds_conv.reindex(rii)
-        #     unique, rii = tf.unique(ds_conv.indices, out_idx=tf.int64)
-        #     ds_conv = ds_conv.gather(unique)
-        #     ip_conv = ip_conv.gather(unique)
-        #     ip_conv
-        #     if ds_conv is not None:
-        #         ds_conv = ds_conv.gather(unique)
-        #     if rii is not None:
-        #         ip_conv = ip_conv.reindex(rii)
-
-        #     if ds_conv is not None:
-        #         ds_conv.reindex(rii)
-
-        #     streams[i] = streams[i].gather(unique)
-
-        # if unique is not None:
-        #     polarity = tf.gather(polarity, unique)
-
-        # for stream in streams:
-        #     print(
-        #         getattr(stream, 'grid').static_shape
-        #         if hasattr(stream, 'grid') else [], stream.times.shape[0])
-        # for convs in convolvers:
-        #     print([c.indices.shape[0] for c in convs])
-
-        # for convs in convolvers[:-1]:
-        #     for c in convs:
-        #         if c is not None:
-        #             vis_adjacency(c)
-        #             if isinstance(c, comp.SpatialStream):
-        #                 vis_graph(c)
-        #     plt.show()
-
-        # vis_adjacency(temporal_convolver)
-        # plt.show()
-
-        # vis_streams(*streams, polarity=polarity)
 
 
 out = []

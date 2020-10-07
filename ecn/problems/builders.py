@@ -77,7 +77,7 @@ def ncars_inception_graph(
 
     activation = tf.keras.activations.get(activation)
 
-    spike_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
+    lif_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
 
     with mg.pre_cache_context():
         grid = comp.Grid(tf.reduce_max(coords, axis=0) + 1)
@@ -88,7 +88,7 @@ def ncars_inception_graph(
     in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=None)
     # in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=None)
 
-    out_stream = comp.spike_threshold(
+    out_stream = comp.spatial_leaky_integrate_and_fire(
         in_stream,
         link,
         decay_time=decay_time,
@@ -158,8 +158,8 @@ def ncars_inception_graph(
 
         # down sample conv
         link = in_stream.grid.link((3, 3), (2, 2), (1, 1))
-        out_stream = comp.spike_threshold(
-            in_stream, link, decay_time=decay_time, min_mean_size=None, **spike_kwargs
+        out_stream = comp.spatial_leaky_integrate_and_fire(
+            in_stream, link, decay_time=decay_time, min_mean_size=None, **lif_kwargs
         )
 
         filters *= 2
@@ -181,8 +181,8 @@ def ncars_inception_graph(
         del out_stream
         decay_time *= 2
 
-    global_stream = comp.global_spike_threshold(
-        in_stream, decay_time=decay_time, min_mean_size=None, **spike_kwargs
+    global_stream = comp.leaky_integrate_and_fire(
+        in_stream, decay_time=decay_time, min_mean_size=None, **lif_kwargs
     )
     flat_convolver = comp.temporal_convolver(in_stream, global_stream, decay_time)
     features = flat_convolver.convolve(
@@ -262,7 +262,7 @@ def simple1d_half_graph(
 
     size = initial_size
 
-    spike_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
+    lif_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
     filters = filters0
     grid = comp.Grid(grid_shape)
 
@@ -273,12 +273,12 @@ def simple1d_half_graph(
     padding = (kernel_size - 1) // 2
     for _ in range(3):
         link = in_stream.grid.link((kernel_size,), (2,), (padding,))
-        out_stream = comp.spike_threshold(
+        out_stream = comp.spatial_leaky_integrate_and_fire(
             in_stream,
             link=link,
             decay_time=decay_time,
             min_mean_size=size,
-            **spike_kwargs,
+            **lif_kwargs,
         )
         size = None if size is None else size // 4
         convolver = comp.spatio_temporal_convolver(
@@ -298,8 +298,8 @@ def simple1d_half_graph(
         filters *= 2
         decay_time *= 2
 
-    global_stream = comp.global_spike_threshold(
-        in_stream, decay_time=decay_time, min_mean_size=size, **spike_kwargs
+    global_stream = comp.leaky_integrate_and_fire(
+        in_stream, decay_time=decay_time, min_mean_size=size, **lif_kwargs
     )
     flat_convolver = comp.flatten_convolver(in_stream, global_stream, decay_time)
     features = flat_convolver.convolve(
@@ -383,7 +383,7 @@ def simple1d_graph(
 
     size = initial_size
 
-    spike_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
+    lif_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
     filters = filters0
     grid = comp.Grid(grid_shape)
 
@@ -395,12 +395,12 @@ def simple1d_graph(
     for _ in range(3):
         # in-place
         link = in_stream.grid.link((kernel_size,), (1,), (padding,))
-        out_stream = comp.spike_threshold(
+        out_stream = comp.spatial_leaky_integrate_and_fire(
             in_stream,
             link=link,
             decay_time=decay_time,
             min_mean_size=size,
-            **spike_kwargs,
+            **lif_kwargs,
         )
         size = None if size is None else size // 2
 
@@ -420,12 +420,12 @@ def simple1d_graph(
         filters *= 2
         in_stream = out_stream
         link = in_stream.grid.link((kernel_size,), (2,), (padding,))
-        out_stream = comp.spike_threshold(
+        out_stream = comp.spatial_leaky_integrate_and_fire(
             in_stream,
             link=link,
             decay_time=decay_time,
             min_mean_size=size,
-            **spike_kwargs,
+            **lif_kwargs,
         )
         size = None if size is None else size // 2
         convolver = comp.spatio_temporal_convolver(
@@ -444,8 +444,8 @@ def simple1d_graph(
         in_stream = out_stream
         decay_time *= 2
 
-    global_stream = comp.global_spike_threshold(
-        in_stream, decay_time=decay_time, min_mean_size=size, **spike_kwargs
+    global_stream = comp.leaky_integrate_and_fire(
+        in_stream, decay_time=decay_time, min_mean_size=size, **lif_kwargs
     )
     flat_convolver = comp.flatten_convolver(in_stream, global_stream, decay_time)
     features = flat_convolver.convolve(
@@ -500,7 +500,7 @@ def simple_multi_graph(
     polarity = features["polarity"]
     filters = filters0
 
-    spike_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
+    lif_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
 
     grid = comp.Grid(grid_shape)
     link = grid.link((3, 3), (1, 1), (0, 0))
@@ -510,12 +510,12 @@ def simple_multi_graph(
     )
     # in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=None)
 
-    out_stream = comp.spike_threshold(
+    out_stream = comp.spatial_leaky_integrate_and_fire(
         in_stream,
         link,
         decay_time=decay_time,
         min_mean_size=1024 if static_sizes else None,
-        **spike_kwargs,
+        **lif_kwargs,
     )
 
     features = in_stream.prepare_model_inputs(polarity)
@@ -555,12 +555,12 @@ def simple_multi_graph(
         features = layers.Dropout(dropout_rate)(features)
 
         link = in_stream.grid.link((5, 5), (2, 2), (2, 2))
-        out_stream = comp.spike_threshold(
+        out_stream = comp.spatial_leaky_integrate_and_fire(
             in_stream,
             link,
             decay_time=decay_time,
             min_mean_size=min_mean_size if static_sizes else None,
-            **spike_kwargs,
+            **lif_kwargs,
         )
 
         ds_convolver = comp.spatio_temporal_convolver(
@@ -582,11 +582,11 @@ def simple_multi_graph(
         decay_time *= 2
         filters *= 2
 
-    global_stream = comp.global_spike_threshold(
+    global_stream = comp.leaky_integrate_and_fire(
         in_stream,
         decay_time=decay_time,
         min_mean_size=32 if static_sizes else None,
-        **spike_kwargs,
+        **lif_kwargs,
     )
     flat_convolver = comp.flatten_convolver(in_stream, global_stream, decay_time)
     features = flat_convolver.convolve(
@@ -644,7 +644,7 @@ def inception_multi_graph(
 
     activation = tf.keras.activations.get(activation)
 
-    spike_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
+    lif_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
 
     grid = comp.Grid(grid_shape)
     link = grid.link((3, 3), (1, 1), (1, 1))
@@ -655,7 +655,7 @@ def inception_multi_graph(
     )
     # in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=None)
 
-    out_stream = comp.spike_threshold(
+    out_stream = comp.spatial_leaky_integrate_and_fire(
         in_stream,
         link,
         decay_time=decay_time,
@@ -724,12 +724,12 @@ def inception_multi_graph(
 
         # down sample conv
         link = in_stream.grid.link((3, 3), (2, 2), (1, 1))
-        out_stream = comp.spike_threshold(
+        out_stream = comp.spatial_leaky_integrate_and_fire(
             in_stream,
             link,
             decay_time=decay_time,
             min_mean_size=min_mean_size if static_sizes else None,
-            **spike_kwargs,
+            **lif_kwargs,
         )
 
         filters *= 2
@@ -751,11 +751,11 @@ def inception_multi_graph(
         del out_stream
         decay_time *= 2
 
-    global_stream = comp.global_spike_threshold(
+    global_stream = comp.leaky_integrate_and_fire(
         in_stream,
         decay_time=decay_time,
         min_mean_size=64 if static_sizes else None,
-        **spike_kwargs,
+        **lif_kwargs,
     )
     flat_convolver = comp.flatten_convolver(in_stream, global_stream, decay_time)
     features = flat_convolver.convolve(
@@ -819,7 +819,7 @@ def inception128_multi_graph(
     filters = filters0
     activation = tf.keras.activations.get(activation)
 
-    spike_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
+    lif_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
 
     grid = comp.Grid(grid_shape)
     # link = grid.link((5, 5), (2, 2), (2, 2))
@@ -834,13 +834,13 @@ def inception128_multi_graph(
     )
     # in_stream = comp.SpatialStream(grid, times, coords, min_mean_size=None)
 
-    out_stream = comp.spike_threshold(
+    out_stream = comp.spatial_leaky_integrate_and_fire(
         in_stream,
         link,
         decay_time=decay_time,
         #   min_mean_size=hidden_mean_sizes[0],
         bucket_sizes=bucket_sizes,
-        **spike_kwargs,
+        **lif_kwargs,
     )
 
     features = in_stream.prepare_model_inputs(polarity)
@@ -900,13 +900,13 @@ def inception128_multi_graph(
         features = features + branched
 
         link = in_stream.grid.link((3, 3), (2, 2), (1, 1))
-        out_stream = comp.spike_threshold(
+        out_stream = comp.spatial_leaky_integrate_and_fire(
             in_stream,
             link,
             decay_time=decay_time,
             #   min_mean_size=min_mean_size,
             bucket_sizes=bucket_sizes,
-            **spike_kwargs,
+            **lif_kwargs,
         )
 
         filters *= 2
@@ -928,12 +928,12 @@ def inception128_multi_graph(
         del out_stream
         decay_time = int(decay_time * decay_time_expansion_rate)
 
-    global_stream = comp.global_spike_threshold(
+    global_stream = comp.leaky_integrate_and_fire(
         in_stream,
         decay_time=decay_time,
         # min_mean_size=final_mean_size,
         bucket_sizes=bucket_sizes,
-        **spike_kwargs,
+        **lif_kwargs,
     )
     flat_convolver = comp.flatten_convolver(in_stream, global_stream, decay_time)
     features = flat_convolver.convolve(
@@ -998,7 +998,7 @@ def inception_multi_graph_v2(
     filters = filters0
     activation = tf.keras.activations.get(activation)
 
-    spike_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
+    lif_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
 
     grid = comp.Grid(grid_shape)
     # link = grid.link((5, 5), (2, 2), (2, 2))
@@ -1006,12 +1006,8 @@ def inception_multi_graph_v2(
 
     in_stream = comp.SpatialStream(grid, times, coords, bucket_sizes=bucket_sizes)
 
-    out_stream = comp.spike_threshold(
-        in_stream,
-        link,
-        decay_time=decay_time,
-        bucket_sizes=bucket_sizes,
-        **spike_kwargs,
+    out_stream = comp.spatial_leaky_integrate_and_fire(
+        in_stream, link, decay_time=decay_time, bucket_sizes=bucket_sizes, **lif_kwargs,
     )
 
     features = in_stream.prepare_model_inputs(polarity)
@@ -1070,12 +1066,12 @@ def inception_multi_graph_v2(
         features = features + branched
 
         link = in_stream.grid.link((3, 3), (2, 2), (1, 1))
-        out_stream = comp.spike_threshold(
+        out_stream = comp.spatial_leaky_integrate_and_fire(
             in_stream,
             link,
             decay_time=decay_time,
             bucket_sizes=bucket_sizes,
-            **spike_kwargs,
+            **lif_kwargs,
         )
 
         filters *= 2
@@ -1097,8 +1093,8 @@ def inception_multi_graph_v2(
         del out_stream
         decay_time = int(decay_time * decay_time_expansion_rate)
 
-    global_stream = comp.global_spike_threshold(
-        in_stream, decay_time=decay_time, bucket_sizes=bucket_sizes, **spike_kwargs
+    global_stream = comp.leaky_integrate_and_fire(
+        in_stream, decay_time=decay_time, bucket_sizes=bucket_sizes, **lif_kwargs
     )
     flat_convolver = comp.flatten_convolver(in_stream, global_stream, decay_time)
     features = flat_convolver.convolve(
@@ -1183,7 +1179,7 @@ def inception_vox_pooling(
     filters = filters0
     activation = tf.keras.activations.get(activation)
 
-    spike_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
+    lif_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
 
     grid = comp.Grid(grid_shape)
     # link = grid.link((5, 5), (2, 2), (2, 2))
@@ -1196,12 +1192,8 @@ def inception_vox_pooling(
         t_end = in_stream.cached_times[-1] + 1
     t_end = mg.batch(t_end)
 
-    out_stream = comp.spike_threshold(
-        in_stream,
-        link,
-        decay_time=decay_time,
-        bucket_sizes=bucket_sizes,
-        **spike_kwargs,
+    out_stream = comp.spatial_leaky_integrate_and_fire(
+        in_stream, link, decay_time=decay_time, bucket_sizes=bucket_sizes, **lif_kwargs,
     )
 
     features = in_stream.prepare_model_inputs(polarity)
@@ -1294,12 +1286,12 @@ def inception_vox_pooling(
         filters *= 2
 
         link = in_stream.grid.link((3, 3), (2, 2), (1, 1))
-        out_stream = comp.spike_threshold(
+        out_stream = comp.spatial_leaky_integrate_and_fire(
             in_stream,
             link,
             decay_time=decay_time,
             bucket_sizes=bucket_sizes,
-            **spike_kwargs,
+            **lif_kwargs,
         )
 
         ds_convolver = comp.spatio_temporal_convolver(
@@ -1381,7 +1373,7 @@ def inception_pooling(
     filters = filters0
     activation = tf.keras.activations.get(activation)
 
-    spike_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
+    lif_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
 
     grid = comp.Grid(grid_shape)
     # link = grid.link((5, 5), (2, 2), (2, 2))
@@ -1392,12 +1384,8 @@ def inception_pooling(
     )
     t_end = tf.gather(in_stream.model_times, in_stream.model_row_ends)
 
-    out_stream = comp.spike_threshold(
-        in_stream,
-        link,
-        decay_time=decay_time,
-        bucket_sizes=bucket_sizes,
-        **spike_kwargs,
+    out_stream = comp.spatial_leaky_integrate_and_fire(
+        in_stream, link, decay_time=decay_time, bucket_sizes=bucket_sizes, **lif_kwargs,
     )
 
     features = in_stream.prepare_model_inputs(polarity)
@@ -1467,12 +1455,12 @@ def inception_pooling(
         features = do_in_place(in_stream, features, filters)
 
         link = in_stream.grid.link((3, 3), (2, 2), (1, 1))
-        out_stream = comp.spike_threshold(
+        out_stream = comp.spatial_leaky_integrate_and_fire(
             in_stream,
             link,
             decay_time=decay_time,
             bucket_sizes=bucket_sizes,
-            **spike_kwargs,
+            **lif_kwargs,
         )
 
         filters *= 2

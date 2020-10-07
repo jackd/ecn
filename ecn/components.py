@@ -9,9 +9,9 @@ import kblocks.ops.sparse as sparse_ops
 import multi_graph as mg
 from ecn.layers import conv as conv_layers
 from ecn.ops import grid as grid_ops
+from ecn.ops import lif as lif_ops
 from ecn.ops import neighbors as neigh_ops
 from ecn.ops import ragged as ragged_ops
-from ecn.ops import spike as spike_ops
 from kblocks.extras.layers import ragged as ragged_layers
 from kblocks.extras.layers import shape as shape_layers
 from kblocks.keras import layers
@@ -1142,7 +1142,7 @@ class Convolver(Generic[S0, S1]):
             )
 
 
-def spike_threshold(
+def spatial_leaky_integrate_and_fire(
     stream: SpatialStream,
     link: GridNeighbors,
     decay_time: int,
@@ -1153,7 +1153,7 @@ def spike_threshold(
 ) -> SpatialStream:
     assert stream.grid == link.in_grid
     with mg.pre_cache_context():
-        times, coords = spike_ops.spike_threshold(
+        times, coords = lif_ops.spatial_leaky_integrate_and_fire(
             stream.times,
             stream.coords,
             link.indices,
@@ -1172,7 +1172,7 @@ def spike_threshold(
     )
 
 
-def global_spike_threshold(
+def leaky_integrate_and_fire(
     stream: Stream,
     decay_time: int,
     threshold: float = 1.0,
@@ -1181,7 +1181,7 @@ def global_spike_threshold(
     min_mean_size: Optional[int] = None,
 ) -> Stream:
     with mg.pre_cache_context():
-        time = spike_ops.global_spike_threshold(
+        time = lif_ops.leaky_integrate_and_fire(
             stream.times,
             decay_time=decay_time,
             threshold=threshold,

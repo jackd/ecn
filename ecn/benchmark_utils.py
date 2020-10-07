@@ -22,7 +22,7 @@ def run_benchmarks(burn_iters, num_iters, *names_and_fns):
         print("{:20}: {:.10f} ({:.2f})".format(names[i], times[i], times[i] / t0))
 
 
-class BenchmarkManager(object):
+class BenchmarkManager:
     def __init__(self, name="default"):
         self.names_and_fns = []
         self.name = name

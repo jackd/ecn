@@ -7,9 +7,9 @@ from mpl_toolkits.mplot3d.art3d import Line3DCollection
 from scipy.sparse import coo_matrix
 
 import events_tfds.vis.anim as anim
-from ecn.ops import grid
+from ecn.ops import grid, lif
 from ecn.ops import neighbors as neigh
-from ecn.ops import ragged, spike
+from ecn.ops import ragged
 from events_tfds.events.nmnist import NMNIST
 from events_tfds.vis.image import as_frames
 
@@ -74,7 +74,7 @@ ip_kwargs = dict(
 
 GRID_SHAPE = (34, 34)
 NUM_LEVELS = 3
-spike_kwargs = dict(reset_potential=-1.0,)
+lif_kwargs = dict(reset_potential=-1.0,)
 DECAY_TIME = 12500
 NUM_FRAMES = 20
 FPS = 4
@@ -118,7 +118,7 @@ def process_events(times, coords, polarity):
 
         # resample
         indices_T, splits_T, _ = ragged.transpose_csr(indices, splits, partitions)
-        out_times, out_coords = spike.spike_threshold(
+        out_times, out_coords = lif.spatial_leaky_integrate_and_fire(
             times,
             coords,
             grid_indices=indices_T,
@@ -126,7 +126,7 @@ def process_events(times, coords, polarity):
             decay_time=decay_time,
             threshold=thresh,
             out_size=tf.math.reduce_prod(out_shape).numpy(),
-            **spike_kwargs
+            **lif_kwargs
         )
         event_sizes.append(out_times.shape[0])
 

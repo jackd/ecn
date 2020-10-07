@@ -178,10 +178,10 @@ class ComponentsTest(tf.test.TestCase):
                     functools.partial(build_fn, dtype=dtype, feature_type=feature_type),
                 )
 
-    def test_global_spike_conv(self):
+    def test_lif_conv(self):
         def build_fn(times, features, dtype, feature_type):
             stream = comp.Stream(times, dtype=dtype)
-            out_stream = comp.global_spike_threshold(stream, 2)
+            out_stream = comp.leaky_integrate_and_fire(stream, 2)
             conv = comp.temporal_convolver(
                 stream, out_stream, decay_time=2, max_decays=4
             )
@@ -213,12 +213,12 @@ class ComponentsTest(tf.test.TestCase):
                     functools.partial(build_fn, dtype=dtype, feature_type=feature_type),
                 )
 
-    def test_batched_1d_spike_conv(self):
+    def test_batched_1d_lif_conv(self):
         def build_fn(coords, times, features, dtype=tf.int64, feature_type="none"):
             grid = comp.Grid((2,), dtype=dtype)
             link = grid.self_link((2,))
             stream = comp.SpatialStream(grid, times, coords, dtype=dtype)
-            out_stream = comp.spike_threshold(stream, link, 2)
+            out_stream = comp.spatial_leaky_integrate_and_fire(stream, link, 2)
 
             conv = comp.spatio_temporal_convolver(
                 link,
@@ -265,7 +265,7 @@ class ComponentsTest(tf.test.TestCase):
                     functools.partial(build_fn, dtype=dtype, feature_type=feature_type),
                 )
 
-    def test_batched_1d_spike_conv_big(self):
+    def test_batched_1d_lif_conv_big(self):
         # np.random.seed(123)  # passes
         np.random.seed(124)  # fails
         grid_size = 7
@@ -274,7 +274,7 @@ class ComponentsTest(tf.test.TestCase):
             grid = comp.Grid((grid_size,), dtype=dtype)
             link = grid.link((2,), (2,), (0,))
             stream = comp.SpatialStream(grid, times, coords, dtype=dtype)
-            out_stream = comp.spike_threshold(stream, link, 2)
+            out_stream = comp.spatial_leaky_integrate_and_fire(stream, link, 2)
             features = feature_inputs(features, stream, feature_type)
 
             conv = comp.spatio_temporal_convolver(
@@ -319,7 +319,7 @@ class ComponentsTest(tf.test.TestCase):
                     functools.partial(build_fn, dtype=dtype, feature_type=feature_type),
                 )
 
-    def test_batched_1d_spike_conv_chained(self):
+    def test_batched_1d_lif_conv_chained(self):
         grid_size = 13
         t0 = 200
 
@@ -327,7 +327,7 @@ class ComponentsTest(tf.test.TestCase):
             grid = comp.Grid((grid_size,), dtype=dtype)
             link = grid.link((3,), (2,), (1,))
             stream = comp.SpatialStream(grid, times, coords, dtype=dtype)
-            out_stream = comp.spike_threshold(stream, link, t0)
+            out_stream = comp.spatial_leaky_integrate_and_fire(stream, link, t0)
             features = feature_inputs(features, stream, feature_type)
 
             conv = comp.spatio_temporal_convolver(
@@ -344,7 +344,7 @@ class ComponentsTest(tf.test.TestCase):
             stream = out_stream
             # link = stream.grid.link((3,), (2,), (0))
             link = stream.grid.self_link((3,))
-            out_stream = comp.spike_threshold(stream, link, 2 * t0)
+            out_stream = comp.spatial_leaky_integrate_and_fire(stream, link, 2 * t0)
             conv = comp.spatio_temporal_convolver(
                 link,
                 stream,
@@ -384,11 +384,11 @@ class ComponentsTest(tf.test.TestCase):
                     functools.partial(build_fn, dtype=dtype, feature_type=feature_type),
                 )
 
-    def test_batched_global_1d_spike_conv(self):
+    def test_batched_global_1d_lif_conv(self):
         def build_fn(coords, times, features, dtype=tf.int64, feature_type="none"):
             grid = comp.Grid((2,), dtype=dtype)
             stream = comp.SpatialStream(grid, times, coords, dtype=dtype)
-            out_stream = comp.global_spike_threshold(stream, 2)
+            out_stream = comp.leaky_integrate_and_fire(stream, 2)
 
             conv = comp.flatten_convolver(
                 stream, out_stream, decay_time=2, max_decays=4
