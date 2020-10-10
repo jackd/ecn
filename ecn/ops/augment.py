@@ -23,7 +23,7 @@ def to_bool(maybe: MaybeBool) -> Union[bool, BoolTensor, FloatTensor]:
             return tf.random.uniform(()) < maybe
         else:
             raise ValueError(
-                f"maybe must be a bool or float if a tensor, " "got dtype {maybe.dtype}"
+                f"maybe must be a bool or float if a tensor, got dtype {maybe.dtype}"
             )
     elif isinstance(maybe, bool):
         return maybe
@@ -138,22 +138,3 @@ def augment(
         polarity = tf.boolean_mask(polarity, mask)
 
     return time, coords, polarity, mask
-
-
-if __name__ == "__main__":
-    from ecn.problems import sources
-
-    # source = sources.nmnist_source()
-    source = sources.cifar10_dvs_source()
-    grid_shape = source.meta["grid_shape"]
-    for features, label in source.get_dataset("validation"):
-        sources.vis_example((features, label))
-        time, coords, polarity, _ = augment(
-            features["time"],
-            features["coords"],
-            features["polarity"],
-            grid_shape=grid_shape,
-            flip_ud=True,
-        )
-        features = dict(time=time, coords=coords, polarity=polarity)
-        sources.vis_example((features, label), reverse_xy=True)

@@ -1,148 +1,17 @@
-import functools
-from typing import Callable, Optional
-
 import gin
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 from absl import logging
 
+import ecn.components as comp
+import events_tfds.vis.anim as anim
 import multi_graph as mg
-from ecn import components as comp
-from kblocks.framework.sources import DataSource, PipelinedSource, RectBatcher
-from kblocks.framework.trainable import Trainable
-
-# from kblocks.framework.sources import DataSource, PipelinedSource
+from events_tfds.vis.image import as_frame, as_frames
+from kblocks.framework.sources import DataSource
 
 
-# from kblocks.framework.pipelines import BasePipeline  # HACK
-
-# from ecn import multi_graph as mg
-
-losses = tf.keras.losses
-metrics = tf.keras.metrics
-optimizers = tf.keras.optimizers
-
-
-@gin.configurable(module="ecn.utils")
-def compile_stream_classifier(model: tf.keras.Model, optimizer=None, target="final"):
-    if optimizer is None:
-        optimizer = optimizers.Adam()
-    if target == "final":
-        loss_weights = {"final": 1.0, "stream": 0.0}
-    else:
-        loss_weights = {"final": 0.0, "stream": 1.0}
-    model.compile(
-        loss={
-            "final": losses.SparseCategoricalCrossentropy(
-                from_logits=True, name="final_xe"
-            ),
-            "stream": losses.SparseCategoricalCrossentropy(
-                from_logits=True, reduction="sum", name="stream_xe"
-            ),
-        },
-        metrics={
-            "final": metrics.SparseCategoricalAccuracy(name="acc"),
-            "stream": metrics.SparseCategoricalAccuracy(name="acc"),
-        },
-        loss_weights=loss_weights,
-        optimizer=optimizer,
-    )
-
-
-@gin.configurable(module="ecn.utils")
-def compile_classifier(model: tf.keras.Model, optimizer=None):
-    if optimizer is None:
-        optimizer = optimizers.Adam()
-    model.compile(
-        loss=losses.SparseCategoricalCrossentropy(from_logits=True),
-        metrics=[metrics.SparseCategoricalAccuracy(name="acc")],
-        optimizer=optimizer,
-    )
-
-
-@gin.configurable(module="ecn.utils")
-def compile_binary_classifier(
-    model: tf.keras.Model, optimizer=None, label_smoothing=0.05
-):
-    if optimizer is None:
-        optimizer = optimizers.Adam()
-    model.compile(
-        loss=losses.BinaryCrossentropy(
-            from_logits=True, label_smoothing=label_smoothing
-        ),
-        metrics=[metrics.BinaryAccuracy(name="acc")],
-        optimizer=optimizer,
-    )
-
-
-@gin.configurable(module="ecn.utils")
-def compile_stream_binary_classifier(
-    model: tf.keras.Model, optimizer=None, target="final"
-):
-    if optimizer is None:
-        optimizer = tf.keras.optimizers.Adam()
-    if target == "final":
-        loss_weights = {"final": 1.0, "stream": 0.0}
-    else:
-        loss_weights = {"final": 0.0, "stream": 1.0}
-    model.compile(
-        loss={
-            "final": losses.BinaryCrossentropy(from_logits=True, name="final_xe"),
-            "stream": losses.BinaryCrossentropy(
-                from_logits=True, reduction="sum", name="stream_xe"
-            ),
-        },
-        metrics={
-            "final": metrics.BinaryAccuracy(name="acc"),
-            "stream": metrics.BinaryAccuracy(name="acc"),
-        },
-        loss_weights=loss_weights,
-        optimizer=optimizer,
-    )
-
-
-@gin.configurable(module="ecn.utils")
-def get_cache_name(problem_id, model_id):
-    return f"{problem_id}_{model_id}"
-
-
-@gin.configurable(module="ecn.utils")
-def multi_graph_trainable(
-    build_fn: Callable,
-    base_source: DataSource,
-    batch_size: int,
-    compiler=compile_stream_classifier,
-    model_dir: Optional[str] = None,
-    rebuild_model_with_xla: bool = False,
-    **pipeline_kwargs,
-):
-    logging.info("Building multi graph...")
-    built = mg.build_multi_graph(
-        functools.partial(build_fn, **base_source.meta),
-        base_source.element_spec,
-        batch_size,
-    )
-
-    logging.info("Successfully built!")
-
-    source = PipelinedSource(
-        base_source,
-        batcher=RectBatcher(batch_size),
-        pre_cache_map=built.pre_cache_map,
-        pre_batch_map=built.pre_batch_map,
-        post_batch_map=built.post_batch_map,
-        **pipeline_kwargs,
-    )
-    model = built.trained_model
-    if rebuild_model_with_xla:
-        with tf.xla.experimental.jit_scope():
-            model = tf.keras.models.clone_model(model)
-
-    if compiler is not None:
-        compiler(model)
-    return Trainable(source, model, model_dir)
-
-
+@gin.configurable(module="ecn.vis")
 def vis_streams(
     build_fn,
     base_source: DataSource,
@@ -151,10 +20,6 @@ def vis_streams(
     group_size=1,
     skip_vis=False,
 ):
-    import events_tfds.vis.anim as anim  # pylint: disable=import-outside-toplevel
-    from events_tfds.vis.image import (  # pylint: disable=import-outside-toplevel
-        as_frames,
-    )
 
     builder = mg.MultiGraphBuilder(batch_size=1)
     with builder:
@@ -237,8 +102,8 @@ def vis_streams(
         anim.animate_frames_multi(*img_data, fps=fps)
 
 
+@gin.configurable(module="ecn.vis")
 def vis_streams1d(build_fn, base_source: DataSource):
-    import matplotlib.pyplot as plt
 
     # colors = np.array([
     #     [0, 0, 0],
@@ -327,9 +192,8 @@ def _vis_single_adjacency(indices, splits, in_times, out_times, decay_time, ax0,
     ax1.hist(values)
 
 
+@gin.configurable(module="ecn.vis")
 def vis_adjacency(build_fn, base_source: DataSource):
-    import matplotlib.pyplot as plt
-
     builder = mg.MultiGraphBuilder(batch_size=1)
     with builder:
         with comp.stream_accumulator() as streams:
@@ -383,47 +247,45 @@ def vis_adjacency(build_fn, base_source: DataSource):
         plt.show()
 
 
-def benchmark_source(source_fn, build_fn, take=1000, batch_size=32):
-    base_source = source_fn(
-        examples_per_epoch={"train": take, "validation": batch_size,}
-    )
-    trainable = multi_graph_trainable(
-        build_fn,
-        base_source,
-        batch_size=batch_size,
-        cache_dir="/tmp/ecn_tests/benchmark_source",
-        clear_cache=True,
-        use_cache=True,
-    )
-    trainable.fit(10, validation_freq=20)
+@gin.configurable(module="ecn.vis")
+def vis_example(
+    example,
+    num_frames=20,
+    fps=4,
+    reverse_xy=False,
+    flip_up_down=False,
+    class_names=None,
+):
+
+    features, label = example
+    coords = features["coords"]
+    time = features["time"]
+    time = (time - tf.reduce_min(time)).numpy()
+    polarity = features["polarity"].numpy()
+    if class_names is not None:
+        print(class_names[label.numpy()])
+    else:
+        print(label.numpy())
+
+    coords = (coords - tf.reduce_min(coords, axis=0)).numpy()
+    print(f"{time.shape[0]} events over {time[-1] - time[0]} dt")
+    if reverse_xy:
+        coords = coords[:, -1::-1]
+
+    if num_frames == 1:
+        frame = as_frame(coords, polarity)
+        plt.imshow(frame)
+        plt.show()
+    else:
+        frames = as_frames(
+            coords, time, polarity, num_frames=num_frames, flip_up_down=flip_up_down
+        )
+        anim.animate_frames(frames, fps=fps)
 
 
 if __name__ == "__main__":
-    from ecn.problems import builders, sources
-
-    # from ecn.problems import augment
-    # source = sources.ncars_source()
-    # build_fn = builders.ncars_inception_graph
-    # source = sources.ntidigits_source()
-    # build_fn = functools.partial(builders.simple1d_half_graph,
-    #                              #  kernel_size=5,
-    #                              #  threshold=1.0
-    #                             )
-    # build_fn = builders.simple_multi_graph
-    # build_fn = builders.inception_multi_graph
-    # source = sources.mnist_dvs_source()
-    # source = augment.Augmented2DSource(source)
-    # build_fn = functools.partial(builders.inception128_multi_graph,
-    #                              threshold=1.5,
-    #                              decay_time=10000,
-    #                              start_mean_size=131072,
-    #                              hidden_mean_sizes=(16384, 4096, 1024, 128),
-    #                              final_mean_size=32)
-    # source = sources.cifar10_dvs_source()
-    # build_fn = builders.inception128_multi_graph
-    # build_fn = functools.partial(builders.inception_pooling, threshold=1.1)
-    # source = sources.asl_dvs_source()
-    # build_fn = functools.partial(builders.inception_pooling, num_levels=4)
+    import functools
+    from ecn import builders, sources
 
     build_fn = functools.partial(
         builders.inception_vox_pooling,
@@ -458,7 +320,7 @@ if __name__ == "__main__":
     # decay_time=2000,
     # reset_potential=-1.
     # )
-    group_size = 1
+    # group_size = 1
     # build_fn = builders.simple1d_graph
     # source = sources.ntidigits_source()
 
@@ -469,8 +331,8 @@ if __name__ == "__main__":
     # vis_streams(build_fn, source)
     # vis_streams(build_fn, source, group_size=group_size, skip_vis=True)
     vis_adjacency(build_fn, source)
-    #     from ecn.problems.nmnist import simple_multi_graph
-    #     from ecn.problems.nmnist import nmnist_source
+    #     from ecn.nmnist import simple_multi_graph
+    #     from ecn.nmnist import nmnist_source
     #     trainable = multi_grpah_trainable(simple_multi_graph,
     #                                       nmnist_source(),
     #                                       batch_size=16,

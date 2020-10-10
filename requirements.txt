@@ -1,3 +1,5 @@
+absl-py
 tensorflow_datasets
+multi-graph@ git+git://github.com/jackd/multi-graph.git
 events-tfds@ git+git://github.com/jackd/events-tfds.git
 numba-stream@ git+git://github.com/jackd/numba-stream.git

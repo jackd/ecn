@@ -1,5 +1,5 @@
+# pylint: disable=import-outside-toplevel
 import gin
-import tensorflow as tf
 
 from kblocks.framework.sources import TfdsSource
 
@@ -122,53 +122,3 @@ def ntidigits_source():
             num_classes=ntidigits.NUM_CLASSES, grid_shape=(ntidigits.NUM_CHANNELS,)
         ),
     )
-
-
-@gin.configurable(module="ecn.sources")
-def vis_example(
-    example,
-    num_frames=20,
-    fps=4,
-    reverse_xy=False,
-    flip_up_down=False,
-    class_names=None,
-):
-    import events_tfds.vis.anim as anim
-    import matplotlib.pyplot as plt
-    from events_tfds.vis.image import as_frame, as_frames
-
-    features, label = example
-    coords = features["coords"]
-    time = features["time"]
-    time = (time - tf.reduce_min(time)).numpy()
-    polarity = features["polarity"].numpy()
-    if class_names is not None:
-        print(class_names[label.numpy()])
-    else:
-        print(label.numpy())
-
-    coords = (coords - tf.reduce_min(coords, axis=0)).numpy()
-    print(f"{time.shape[0]} events over {time[-1] - time[0]} dt")
-    if reverse_xy:
-        coords = coords[:, -1::-1]
-
-    if num_frames == 1:
-        frame = as_frame(coords, polarity)
-        plt.imshow(frame)
-        plt.show()
-    else:
-        frames = as_frames(
-            coords, time, polarity, num_frames=num_frames, flip_up_down=flip_up_down
-        )
-        anim.animate_frames(frames, fps=fps)
-
-
-if __name__ == "__main__":
-    source = cifar10_dvs_source()
-    vis_kwargs = {"reverse_xy": True, "flip_up_down": False}
-
-    print("number of examples:")
-    for split in ("train", "validation"):
-        print("{:20}: {}".format(split, source.epoch_length(split)))
-    for example in source.get_dataset("train"):
-        vis_example(example, **vis_kwargs)

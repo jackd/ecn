@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 
-from ecn.problems import sources
+from ecn import sources
 
 source = sources.asl_dvs_source()
 

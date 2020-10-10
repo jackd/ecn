@@ -3,7 +3,7 @@ import tensorflow as tf
 
 import multi_graph as mg
 from ecn import components as comp
-from ecn.problems import sources
+from ecn import sources
 
 Lambda = tf.keras.layers.Lambda
 

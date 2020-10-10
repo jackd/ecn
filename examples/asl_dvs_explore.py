@@ -2,7 +2,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-from ecn.problems import sources
+from ecn import sources
+
+# from ecn import vis
 
 # source = sources.asl_dvs_source()
 # source = sources.ncaltech101_source()
@@ -38,4 +40,4 @@ plt.show()
 #     n = example[0]['time'].shape[0]
 #     if n > 500000:
 #         print(n)
-#         sources.vis_example(example, flip_up_down=True)
+#         vis.vis_example(example, flip_up_down=True)
