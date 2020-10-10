@@ -1,4 +1,4 @@
-import ecn.problems.augment
+import ecn.sources
 import kblocks.extras.cache
 
 base_source = @Augmented2DSource()

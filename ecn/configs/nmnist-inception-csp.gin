@@ -1,7 +1,0 @@
-import kblocks.extras.activations
-
-include 'nmnist-inception.gin'
-include 'misc/complex.gin'
-activation = @kb.extras.activations.softplus
-
-variant_id = 'complex-softplus'

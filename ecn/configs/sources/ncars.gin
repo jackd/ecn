@@ -1,12 +1,12 @@
-import ecn.problems.sources
-import ecn.problems.utils
+import ecn.sources
+import kblocks.framework.compilers
 
 base_source = @ncars_source()
 batch_size = 8
 epochs = 1000
 shuffle_buffer = 256
 
-compiler = @ecn.utils.compile_binary_classifier
+compiler = @compile_binary_classification_model
 problem_id = 'ncars'
 
 validation_freq = 4

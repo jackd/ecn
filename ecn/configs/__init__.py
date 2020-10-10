@@ -1,10 +1,6 @@
 import os
 
-from absl import logging
+from kblocks.gin_utils.config import try_register_config_dir
 
-ECN_CONFIG = os.path.realpath(os.path.dirname(__file__))
-
-if os.environ.get("ECN_CONFIG"):
-    logging.warning("ECN_CONFIG environment variable already set.")
-else:
-    os.environ["ECN_CONFIG"] = ECN_CONFIG
+ECN_CONFIG_DIR = os.path.realpath(os.path.dirname(__file__))
+try_register_config_dir("ECN_CONFIG", ECN_CONFIG_DIR)

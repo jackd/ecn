@@ -1,5 +1,0 @@
-include 'ncaltech101-aug8-small-vox.gin'
-
-cache_repeats = 2
-
-problem_id = 'ncaltech101-aug2-small'

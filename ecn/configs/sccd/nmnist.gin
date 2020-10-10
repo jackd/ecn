@@ -1,7 +1,7 @@
 include 'base.gin'
-include 'builders/vox-pool.gin'
-include 'sources/nmnist-aug-inf.gin'
-include 'misc/rlrp.gin'
+include '../builders/vox-pool.gin'
+include '../sources/nmnist-aug-inf.gin'
+include '../misc/rlrp.gin'
 
 inception_vox_pooling.num_levels = 3
 inception_vox_pooling.vox_start = 0
@@ -9,4 +9,4 @@ inception_vox_pooling.filters0 = 32
 
 epochs = 500
 
-variant_id = 'rlrp'
+variant_id = 'sccd'

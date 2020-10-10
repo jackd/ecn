@@ -1,3 +1,0 @@
-include 'base.gin'
-include 'builders/inception-pooling.gin'
-include 'sources/cifar10.gin'

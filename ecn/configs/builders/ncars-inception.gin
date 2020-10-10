@@ -1,9 +1,0 @@
-import ecn.problems.builders
-
-include '../misc/l2_reg.gin'
-build_fn = @ecn.builders.ncars_inception_graph
-ecn.builders.ncars_inception_graph.activation = %activation
-ecn.builders.ncars_inception_graph.bucket_sizes = %bucket_sizes
-bucket_sizes = False
-activation = 'relu'
-model_id = 'ncars-inception'

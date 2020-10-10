@@ -1,4 +1,0 @@
-include 'ntidigits-simple-small.gin'
-simple1d_graph.use_batch_norm = False
-simple1d_graph.activation = 'selu'
-variant_id = 'selu'

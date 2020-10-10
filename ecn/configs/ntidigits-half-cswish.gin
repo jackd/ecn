@@ -1,8 +1,0 @@
-import kblocks.extras.activations
-
-include 'ntidigits-half.gin'
-include 'misc/complex.gin'
-
-simple1d_half_graph.activation = @kb.extras.activations.modified_swish
-
-variant_id = 'complex-swish'

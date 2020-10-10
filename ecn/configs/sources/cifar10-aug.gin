@@ -1,5 +1,4 @@
-import ecn.problems.augment
-import ecn.problems.sources
+import ecn.sources
 
 include 'cifar10.gin'
 include '../misc/aug.gin'

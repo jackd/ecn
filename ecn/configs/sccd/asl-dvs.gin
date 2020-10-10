@@ -1,6 +1,6 @@
 include 'base.gin'
-include 'builders/vox-pool.gin'
-include 'sources/asl-dvs.gin'
+include '../builders/vox-pool.gin'
+include '../sources/asl-dvs.gin'
 
 inception_vox_pooling.reset_potential = -3.0
 inception_vox_pooling.threshold = 1.0
@@ -10,4 +10,4 @@ inception_vox_pooling.max_events = 300000
 
 inception_vox_pooling.filters0 = 16
 
-problem_id = 'asl-dvs-small'
+variant_id = 'sccd'

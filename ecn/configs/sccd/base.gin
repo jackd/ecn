@@ -1,17 +1,18 @@
 import ecn.layers.conv
-import ecn.problems.utils
 import kblocks.extras.cache
 import kblocks.extras.cache.tfrecords
+import kblocks.framework.compilers
+import kblocks.framework.multi_graph
 import kblocks.keras.optimizers
 import kblocks.path
 
-trainable = @ecn.utils.multi_graph_trainable()
-ecn.utils.multi_graph_trainable.build_fn = %build_fn
-ecn.utils.multi_graph_trainable.base_source = %base_source
-ecn.utils.multi_graph_trainable.batch_size = %batch_size
-ecn.utils.multi_graph_trainable.compiler = %compiler
+trainable = @kb.framework.multi_graph_trainable()
+kb.framework.multi_graph_trainable.build_fn = %build_fn
+kb.framework.multi_graph_trainable.base_source = %base_source
+kb.framework.multi_graph_trainable.batch_size = %batch_size
+kb.framework.multi_graph_trainable.compiler = %compiler
 
-ecn.utils.multi_graph_trainable.model_dir = %model_dir
+kb.framework.multi_graph_trainable.model_dir = %model_dir
 
 model_dir = @kb.path.model_dir()
 kb.path.model_dir.root_dir = '~/ecn'
@@ -25,10 +26,6 @@ ecn.layers.TemporalEventConv.use_csr = %use_csr
 
 use_csr = False
 
-# HACK
-# kb.framework.BasePipeline.clear_cache = %clear_cache
-# kb.framework.BasePipeline.cache_managers = @kb.cache.cache_managers()
-# kb.framework.BasePipeline.shuffle_buffer = %shuffle_buffer
 kb.framework.PipelinedSource.clear_cache = %clear_cache
 kb.framework.PipelinedSource.cache_managers = @kb.cache.cache_managers()
 kb.framework.PipelinedSource.shuffle_buffer = %shuffle_buffer
@@ -40,19 +37,15 @@ kb.cache.TFRecordsCacheManager.compression = 'GZIP'
 cache/kb.path.model_dir.run = None
 cache/kb.path.model_dir.variant_id = 'cache'
 
-
 model_id = 'default_model'
 variant_id = 'default_variant'
 run = 0
 
-compiler = @ecn.utils.compile_stream_classifier
-ecn.utils.compile_stream_classifier.optimizer = @tf.keras.optimizers.Adam()
-ecn.utils.compile_stream_classifier.target = %target
-target = 'final'
+compiler = @kb.framework.compile_classification_model
+kb.framework.compile_classification_model.optimizer = %optimizer
+optimizer = @tf.keras.optimizers.Adam()
 
-# TfConfig.jit = True
 clear_cache = False
-
 bucket_sizes = False
 
 # to define:

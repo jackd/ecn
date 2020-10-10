@@ -1,4 +1,4 @@
-import ecn.problems.sources
+import ecn.sources
 
 base_source = @ncaltech101_source()
 batch_size = 8

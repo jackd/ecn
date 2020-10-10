@@ -1,5 +1,0 @@
-include 'base.gin'
-include 'builders/inception-pooling.gin'
-include 'sources/asl-dvs.gin'
-
-inception_pooling.threshold = 1.1

@@ -1,3 +1,0 @@
-include 'base.gin'
-include 'sources/nmnist.gin'
-include 'builders/simple.gin'

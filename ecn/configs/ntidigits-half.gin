@@ -1,3 +1,0 @@
-include 'base.gin'
-include 'sources/ntidigits.gin'
-include 'builders/half1d.gin'

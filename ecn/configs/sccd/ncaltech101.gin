@@ -1,7 +1,7 @@
 include 'base.gin'
-include 'builders/vox-pool.gin'
-include 'sources/ncaltech101-aug8.gin'
-include 'misc/rlrp.gin'
+include '../builders/vox-pool.gin'
+include '../sources/ncaltech101-aug8.gin'
+include '../misc/rlrp.gin'
 
 inception_vox_pooling.reset_potential = -2.0
 inception_vox_pooling.threshold = 1.25
@@ -11,4 +11,4 @@ inception_vox_pooling.max_events = 300000
 
 inception_vox_pooling.filters0 = 16
 
-problem_id = 'ncaltech101-aug8-small-b'
+variant_id = 'sccd'

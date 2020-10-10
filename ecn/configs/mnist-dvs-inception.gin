@@ -1,9 +1,0 @@
-include 'base.gin'
-include 'builders/inception128.gin'
-include 'sources/mnist-dvs.gin'
-
-inception128_multi_graph.threshold = 1.5
-inception128_multi_graph.decay_time = 10000
-inception128_multi_graph.start_mean_size = 131072
-inception128_multi_graph.hidden_mean_sizes = (16384, 4096, 1024, 128)
-inception128_multi_graph.final_mean_size = 32

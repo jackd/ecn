@@ -1,6 +1,0 @@
-import ecn.layers.conv
-
-ecn.layers.TemporalEventConv.combine = %combine
-ecn.layers.SpatioTemporalEventConv.combine = %combine
-
-combine = 'fold'

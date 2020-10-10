@@ -1,8 +1,0 @@
-import ecn.problems.builders
-
-include '../misc/l2_reg.gin'
-build_fn = @ecn.builders.simple1d_half_graph
-ecn.builders.simple1d_half_graph.activation = %activation
-activation = 'relu'
-
-model_id = 'half1d'

@@ -1,6 +1,0 @@
-include 'mnist-dvs-aug8-vox.gin'
-include 'misc/rlrp.gin'
-
-epochs = 200
-
-variant_id = 'rlrp'

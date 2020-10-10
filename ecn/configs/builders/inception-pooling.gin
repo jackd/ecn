@@ -1,9 +1,0 @@
-import ecn.problems.builders
-import ecn.problems.utils
-
-build_fn = @ecn.builders.inception_pooling
-include '../misc/l2_reg.gin'
-
-compiler = @ecn.utils.compile_classifier
-
-model_id = 'inception-pooling'

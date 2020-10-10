@@ -1,4 +1,0 @@
-include 'nmnist-aug-vox.gin'
-include 'misc/rlrp.gin'
-
-variant_id = 'rlrp'

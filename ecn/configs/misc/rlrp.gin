@@ -3,5 +3,5 @@ import kblocks.keras.callbacks
 kb.framework.fit.callbacks = [@tf.keras.callbacks.ReduceLROnPlateau()]
 ReduceLROnPlateau.patience = 10
 ReduceLROnPlateau.factor = 0.2
-ReduceLROnPlateau.monitor = 'acc'
+ReduceLROnPlateau.monitor = 'sparse_categorical_accuracy'
 ReduceLROnPlateau.mode = 'max'

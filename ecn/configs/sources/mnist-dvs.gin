@@ -1,4 +1,4 @@
-import ecn.problems.sources
+import ecn.sources
 
 base_source = @mnist_dvs_source()
 batch_size = 32

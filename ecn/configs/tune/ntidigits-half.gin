@@ -1,3 +1,0 @@
-include 'base.gin'
-include '../ntidigits-half.gin'
-tune_build_fn = @tuned_simple1d_half_graph

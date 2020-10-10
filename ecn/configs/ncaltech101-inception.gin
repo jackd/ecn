@@ -1,5 +1,0 @@
-include 'base.gin'
-include 'builders/inception-pooling.gin'
-include 'sources/ncaltech101.gin'
-
-inception_pooling.num_levels = 4
