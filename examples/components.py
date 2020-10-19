@@ -1,3 +1,4 @@
+raise NotImplementedError("TODO - redo with meta-model")
 from typing import Any, List
 
 import matplotlib.pyplot as plt
@@ -10,7 +11,6 @@ import events_tfds.vis.anim as anim
 from ecn import components as comp
 from events_tfds.events.nmnist import GRID_SHAPE, NMNIST
 from events_tfds.vis.image import as_frames
-from multi_graph import DebugBuilderContext
 
 
 def vis_adjacency(convolver: comp.Convolver):
@@ -119,73 +119,72 @@ LIF_KWARGS = dict(reset_potential=-2.0, threshold=1.1)
 def process_example(events, label):
     del label
     decay_time = DECAY_TIME
-    with DebugBuilderContext():
-        coords = events["coords"]
-        times = events["time"]
-        grid = comp.Grid(GRID_SHAPE)
-        link = grid.link((3, 3), (1, 1), (0, 0))
+    coords = events["coords"]
+    times = events["time"]
+    grid = comp.Grid(GRID_SHAPE)
+    link = grid.link((3, 3), (1, 1), (0, 0))
 
-        in_stream = comp.SpatialStream(grid, times, coords)
+    in_stream = comp.SpatialStream(grid, times, coords)
+    out_stream = comp.spatial_leaky_integrate_and_fire(
+        in_stream, link, decay_time=decay_time, **LIF_KWARGS
+    )
+    streams: List[comp.Stream] = [in_stream, out_stream]
+
+    convolver = comp.spatio_temporal_convolver(
+        link,
+        in_stream,
+        out_stream,
+        decay_time=decay_time,
+        spatial_buffer_size=SPATIAL_BUFFER,
+    )
+    convolvers: List[List[Any]] = [[None, convolver]]
+
+    in_stream = out_stream
+    del out_stream
+
+    for _ in range(2):
+        # in place
+        decay_time *= 2
+        link = in_stream.grid.self_link((3, 3))
+        ip_convolver = comp.spatio_temporal_convolver(
+            link,
+            in_stream,
+            in_stream,
+            decay_time=decay_time,
+            spatial_buffer_size=SPATIAL_BUFFER,
+        )
+
+        # link = in_stream.grid.link((5, 5), (2, 2), (2, 2))
+        link = in_stream.grid.link((3, 3), (2, 2), (1, 1))
         out_stream = comp.spatial_leaky_integrate_and_fire(
             in_stream, link, decay_time=decay_time, **LIF_KWARGS
         )
-        streams: List[comp.Stream] = [in_stream, out_stream]
+        streams.append(out_stream)
 
-        convolver = comp.spatio_temporal_convolver(
+        ds_convolver = comp.spatio_temporal_convolver(
             link,
             in_stream,
             out_stream,
             decay_time=decay_time,
             spatial_buffer_size=SPATIAL_BUFFER,
         )
-        convolvers: List[List[Any]] = [[None, convolver]]
-
+        convolvers.append([ip_convolver, ds_convolver])
         in_stream = out_stream
         del out_stream
 
-        for _ in range(2):
-            # in place
-            decay_time *= 2
-            link = in_stream.grid.self_link((3, 3))
-            ip_convolver = comp.spatio_temporal_convolver(
-                link,
-                in_stream,
-                in_stream,
-                decay_time=decay_time,
-                spatial_buffer_size=SPATIAL_BUFFER,
-            )
+    decay_time *= 2
+    global_stream = comp.leaky_integrate_and_fire(
+        in_stream, decay_time=decay_time, **LIF_KWARGS
+    )
+    streams.append(global_stream)
+    decay_time *= 2
+    flat_convolver = comp.flatten_convolver(in_stream, global_stream, decay_time)
+    temporal_convolver = comp.temporal_convolver(
+        global_stream, global_stream, decay_time
+    )
+    convolvers.append([flat_convolver, temporal_convolver])
 
-            # link = in_stream.grid.link((5, 5), (2, 2), (2, 2))
-            link = in_stream.grid.link((3, 3), (2, 2), (1, 1))
-            out_stream = comp.spatial_leaky_integrate_and_fire(
-                in_stream, link, decay_time=decay_time, **LIF_KWARGS
-            )
-            streams.append(out_stream)
-
-            ds_convolver = comp.spatio_temporal_convolver(
-                link,
-                in_stream,
-                out_stream,
-                decay_time=decay_time,
-                spatial_buffer_size=SPATIAL_BUFFER,
-            )
-            convolvers.append([ip_convolver, ds_convolver])
-            in_stream = out_stream
-            del out_stream
-
-        decay_time *= 2
-        global_stream = comp.leaky_integrate_and_fire(
-            in_stream, decay_time=decay_time, **LIF_KWARGS
-        )
-        streams.append(global_stream)
-        decay_time *= 2
-        flat_convolver = comp.flatten_convolver(in_stream, global_stream, decay_time)
-        temporal_convolver = comp.temporal_convolver(
-            global_stream, global_stream, decay_time
-        )
-        convolvers.append([flat_convolver, temporal_convolver])
-
-        return tf.stack([tf.size(stream.times) for stream in streams])
+    return tf.stack([tf.size(stream.times) for stream in streams])
 
 
 out = []

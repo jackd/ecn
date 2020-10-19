@@ -1,0 +1,17 @@
+import ecn.vis
+
+main.fn = @ecn.vis.vis_streams2d
+
+ecn.vis.vis_streams2d.build_fn = %build_fn
+ecn.vis.vis_streams2d.base_source = %base_source
+ecn.vis.vis_streams2d.num_frames = %num_frames
+ecn.vis.vis_streams2d.fps = %fps
+ecn.vis.vis_streams2d.group_size = %group_size
+ecn.vis.vis_streams2d.skip_vis = %skip_vis
+ecn.vis.vis_streams2d.flip_up_down = %flip_up_down
+
+num_frames = 20
+fps = 4
+group_size = 1
+skip_vis = False
+flip_up_down = False

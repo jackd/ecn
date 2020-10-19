@@ -1,10 +1,13 @@
 import functools
+import itertools
 
 import numpy as np
 import tensorflow as tf
+from absl.testing import parameterized
 
 import ecn.components as comp
-import multi_graph as mg
+import meta_model.pipeline as pl
+from meta_model.batchers import RaggedBatcher
 
 Lambda = tf.keras.layers.Lambda
 
@@ -20,9 +23,8 @@ def feature_inputs(features, stream, features_type="none"):
     if features_type == "none":
         return None
     if features_type == "binary":
-        with mg.pre_cache_context():
-            features = tf.split(features, [1, -1], axis=1)[0]
-            features = tf.squeeze(features, axis=1) > 0.5
+        features = tf.split(features, [1, -1], axis=1)[0]
+        features = tf.squeeze(features, axis=1) > 0.5
     elif features_type == "float":
         pass
     else:
@@ -46,23 +48,27 @@ INT_TYPES = (
     tf.int64,
 )
 
+INT_AND_FEATURE_TYPES = tuple(itertools.product(INT_TYPES, FEATURE_TYPES))
 
-class ComponentsTest(tf.test.TestCase):
+
+class ComponentsTest(tf.test.TestCase, parameterized.TestCase):
     def _test_batched_simple(self, dataset, build_fn):
-        built = mg.build_multi_graph(build_fn, dataset.element_spec)
-        model = built.trained_model
+        batcher = RaggedBatcher(batch_size=1)
+        pipeline, model = pl.build_pipelined_model(
+            build_fn, dataset.element_spec, batcher=batcher
+        )
         assert model is not None
         single = (
-            dataset.map(built.pre_cache_map)
-            .map(built.pre_batch_map)
-            .batch(1)
-            .map(built.post_batch_map)
+            dataset.map(pipeline.pre_cache_map)
+            .map(pipeline.pre_batch_map)
+            .apply(tf.data.experimental.dense_to_ragged_batch(1))
+            .map(pipeline.post_batch_map)
         )
         double = (
-            dataset.map(built.pre_cache_map)
-            .map(built.pre_batch_map)
-            .batch(2)
-            .map(built.post_batch_map)
+            dataset.map(pipeline.pre_cache_map)
+            .map(pipeline.pre_batch_map)
+            .apply(tf.data.experimental.dense_to_ragged_batch(2))
+            .map(pipeline.post_batch_map)
         )
 
         def as_tuple(x):
@@ -103,8 +109,11 @@ class ComponentsTest(tf.test.TestCase):
         tf.nest.map_structure(assert_allclose, single_labels, double_labels)
         tf.nest.map_structure(assert_allclose, single_weights, double_weights)
 
-    def test_batched_global_conv(self):
-        def build_fn(times, features, dtype, feature_type):
+    @parameterized.parameters(*INT_AND_FEATURE_TYPES)
+    def test_batched_global_conv(self, dtype, feature_type):
+        def build_fn(kwargs):
+            times = kwargs["times"]
+            features = kwargs["features"]
             stream = comp.Stream(times, dtype=dtype)
             conv = comp.temporal_convolver(stream, stream, decay_time=1, max_decays=4)
             out = conv.convolve(feature_inputs(features, stream, feature_type), 2, 2)
@@ -127,15 +136,14 @@ class ComponentsTest(tf.test.TestCase):
             {"times": (None,), "features": (None, 3)},
         )
 
-        for dtype in INT_TYPES:
-            for feature_type in FEATURE_TYPES:
-                self._test_batched_simple(
-                    dataset,
-                    functools.partial(build_fn, dtype=dtype, feature_type=feature_type),
-                )
+        self._test_batched_simple(dataset, build_fn)
 
-    def test_batched_1d_conv(self):
-        def build_fn(coords, times, features, dtype, feature_type):
+    @parameterized.parameters(*INT_AND_FEATURE_TYPES)
+    def test_batched_1d_conv(self, dtype, feature_type):
+        def build_fn(kwargs):
+            coords = kwargs["coords"]
+            times = kwargs["times"]
+            features = kwargs["features"]
             grid = comp.Grid((2,), dtype=dtype)
             link = grid.self_link((2,))
             stream = comp.SpatialStream(grid, times, coords, dtype=dtype)
@@ -171,15 +179,13 @@ class ComponentsTest(tf.test.TestCase):
             {"times": (None,), "coords": (None, 1), "features": (None, 3)},
         )
 
-        for dtype in INT_TYPES:
-            for feature_type in FEATURE_TYPES:
-                self._test_batched_simple(
-                    dataset,
-                    functools.partial(build_fn, dtype=dtype, feature_type=feature_type),
-                )
+        self._test_batched_simple(dataset, build_fn)
 
-    def test_lif_conv(self):
-        def build_fn(times, features, dtype, feature_type):
+    @parameterized.parameters(*INT_AND_FEATURE_TYPES)
+    def test_lif_conv(self, dtype, feature_type):
+        def build_fn(kwargs):
+            times = kwargs["times"]
+            features = kwargs["features"]
             stream = comp.Stream(times, dtype=dtype)
             out_stream = comp.leaky_integrate_and_fire(stream, 2)
             conv = comp.temporal_convolver(
@@ -206,15 +212,14 @@ class ComponentsTest(tf.test.TestCase):
             dict(times=(None,), features=(None, 3)),
         )
 
-        for dtype in INT_TYPES:
-            for feature_type in FEATURE_TYPES:
-                self._test_batched_simple(
-                    dataset,
-                    functools.partial(build_fn, dtype=dtype, feature_type=feature_type),
-                )
+        self._test_batched_simple(dataset, build_fn)
 
-    def test_batched_1d_lif_conv(self):
-        def build_fn(coords, times, features, dtype=tf.int64, feature_type="none"):
+    @parameterized.parameters(*INT_AND_FEATURE_TYPES)
+    def test_batched_1d_lif_conv(self, dtype, feature_type):
+        def build_fn(kwargs):
+            coords = kwargs["coords"]
+            times = kwargs["times"]
+            features = kwargs["features"]
             grid = comp.Grid((2,), dtype=dtype)
             link = grid.self_link((2,))
             stream = comp.SpatialStream(grid, times, coords, dtype=dtype)
@@ -258,19 +263,18 @@ class ComponentsTest(tf.test.TestCase):
             {"times": (None,), "coords": (None, 1), "features": (None, 3),},
         )
 
-        for dtype in INT_TYPES:
-            for feature_type in FEATURE_TYPES:
-                self._test_batched_simple(
-                    dataset,
-                    functools.partial(build_fn, dtype=dtype, feature_type=feature_type),
-                )
+        self._test_batched_simple(dataset, build_fn)
 
-    def test_batched_1d_lif_conv_big(self):
+    @parameterized.parameters(*INT_AND_FEATURE_TYPES)
+    def test_batched_1d_lif_conv_big(self, dtype, feature_type):
         # np.random.seed(123)  # passes
         np.random.seed(124)  # fails
         grid_size = 7
 
-        def build_fn(coords, times, features, dtype=tf.int64, feature_type="none"):
+        def build_fn(kwargs):
+            coords = kwargs["coords"]
+            times = kwargs["times"]
+            features = kwargs["features"]
             grid = comp.Grid((grid_size,), dtype=dtype)
             link = grid.link((2,), (2,), (0,))
             stream = comp.SpatialStream(grid, times, coords, dtype=dtype)
@@ -312,18 +316,17 @@ class ComponentsTest(tf.test.TestCase):
             {"times": (None,), "coords": (None, 1), "features": (None, 3),},
         )
 
-        for dtype in INT_TYPES:
-            for feature_type in FEATURE_TYPES:
-                self._test_batched_simple(
-                    dataset,
-                    functools.partial(build_fn, dtype=dtype, feature_type=feature_type),
-                )
+        self._test_batched_simple(dataset, build_fn)
 
-    def test_batched_1d_lif_conv_chained(self):
+    @parameterized.parameters(*INT_AND_FEATURE_TYPES)
+    def test_batched_1d_lif_conv_chained(self, dtype, feature_type):
         grid_size = 13
         t0 = 200
 
-        def build_fn(coords, times, features, dtype=tf.int64, feature_type="none"):
+        def build_fn(kwargs):
+            coords = kwargs["coords"]
+            times = kwargs["times"]
+            features = kwargs["features"]
             grid = comp.Grid((grid_size,), dtype=dtype)
             link = grid.link((3,), (2,), (1,))
             stream = comp.SpatialStream(grid, times, coords, dtype=dtype)
@@ -377,15 +380,14 @@ class ComponentsTest(tf.test.TestCase):
             {"times": (None,), "coords": (None, 1), "features": (None, 3),},
         )
 
-        for dtype in INT_TYPES:
-            for feature_type in FEATURE_TYPES:
-                self._test_batched_simple(
-                    dataset,
-                    functools.partial(build_fn, dtype=dtype, feature_type=feature_type),
-                )
+        self._test_batched_simple(dataset, build_fn)
 
-    def test_batched_global_1d_lif_conv(self):
-        def build_fn(coords, times, features, dtype=tf.int64, feature_type="none"):
+    @parameterized.parameters(*INT_AND_FEATURE_TYPES)
+    def test_batched_global_1d_lif_conv(self, dtype, feature_type):
+        def build_fn(kwargs):
+            coords = kwargs["coords"]
+            times = kwargs["times"]
+            features = kwargs["features"]
             grid = comp.Grid((2,), dtype=dtype)
             stream = comp.SpatialStream(grid, times, coords, dtype=dtype)
             out_stream = comp.leaky_integrate_and_fire(stream, 2)
@@ -401,7 +403,7 @@ class ComponentsTest(tf.test.TestCase):
 
             return out, (), ()
 
-        data = [
+        data = (
             {
                 "times": np.arange(10, dtype=np.int64),
                 "coords": np.expand_dims(
@@ -416,28 +418,21 @@ class ComponentsTest(tf.test.TestCase):
                 ),
                 "features": np.random.uniform(size=(9, 3)).astype(np.float32),
             },
-        ]
+        )
 
         dataset = tf.data.Dataset.from_generator(
             lambda: data,
-            {"times": tf.int64, "coords": tf.int64, "features": tf.float32,},
-            {"times": (None,), "coords": (None, 1), "features": (None, 3),},
+            {"times": tf.int64, "coords": tf.int64, "features": tf.float32},
+            {"times": (None,), "coords": (None, 1), "features": (None, 3)},
         )
 
-        for dtype in INT_TYPES:
-            for feature_type in FEATURE_TYPES:
-                self._test_batched_simple(
-                    dataset,
-                    functools.partial(build_fn, dtype=dtype, feature_type=feature_type),
-                )
+        self._test_batched_simple(dataset, build_fn)
 
-    def test_to_nearest_power(self):
-        self.assertEqual(self.evaluate(comp.to_nearest_power(2)), 2)
-        self.assertEqual(self.evaluate(comp.to_nearest_power(3)), 4)
-        self.assertEqual(self.evaluate(comp.to_nearest_power(7)), 8)
-        self.assertEqual(self.evaluate(comp.to_nearest_power(8)), 8)
-        self.assertEqual(self.evaluate(comp.to_nearest_power(9)), 16)
+    @parameterized.parameters((2, 2), (3, 4), (7, 8), (8, 8), (9, 16))
+    def test_to_nearest_power(self, power, expected):
+        self.assertEqual(self.evaluate(comp.to_nearest_power(power)), expected)
 
 
 if __name__ == "__main__":
     tf.test.main()
+    # ComponentsTest().test_batched_1d_conv(tf.int32, "float")

@@ -6,7 +6,8 @@ import tensorflow as tf
 
 import ecn.builders as builders
 import ecn.sources as sources
-from kblocks.framework.multi_graph import multi_graph_trainable
+from kblocks.framework.batchers import RaggedBatcher
+from kblocks.framework.meta_model import meta_model_trainable
 from kblocks.framework.sources import DataSource, DelegatingSource, Split
 
 Lambda = tf.keras.layers.Lambda
@@ -28,11 +29,11 @@ class IntegrationTest(tf.test.TestCase):
     def _test_batched_trainable(self, base_source, build_fn):
         source = DeterministicSource(base_source, num_examples=2)
 
-        single = multi_graph_trainable(
-            build_fn, source, 1, cache_managers=None, repeats=1, compiler=None
+        single = meta_model_trainable(
+            build_fn, source, RaggedBatcher(1), cache_managers=None, compiler=None,
         )
-        double = multi_graph_trainable(
-            build_fn, source, 2, cache_managers=None, repeats=1, compiler=None
+        double = meta_model_trainable(
+            build_fn, source, RaggedBatcher(2), cache_managers=None, compiler=None,
         )
         model = single.model
         outs_single = []

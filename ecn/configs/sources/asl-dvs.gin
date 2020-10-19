@@ -6,4 +6,6 @@ epochs = 100
 shuffle_buffer = 256
 validation_freq = 2
 
+flip_up_down = True
+
 problem_id = 'asl-dvs'

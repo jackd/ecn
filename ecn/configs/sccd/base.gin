@@ -1,18 +1,21 @@
 import ecn.layers.conv
 import kblocks.extras.cache
 import kblocks.extras.cache.tfrecords
+import kblocks.framework.batchers
 import kblocks.framework.compilers
-import kblocks.framework.multi_graph
+import kblocks.framework.meta_model
 import kblocks.keras.optimizers
 import kblocks.path
 
-trainable = @kb.framework.multi_graph_trainable()
-kb.framework.multi_graph_trainable.build_fn = %build_fn
-kb.framework.multi_graph_trainable.base_source = %base_source
-kb.framework.multi_graph_trainable.batch_size = %batch_size
-kb.framework.multi_graph_trainable.compiler = %compiler
+trainable = @kb.framework.meta_model_trainable()
+kb.framework.meta_model_trainable.build_fn = %build_fn
+kb.framework.meta_model_trainable.base_source = %base_source
+kb.framework.meta_model_trainable.batcher = @kb.framework.RaggedBatcher()
+kb.framework.meta_model_trainable.compiler = %compiler
 
-kb.framework.multi_graph_trainable.model_dir = %model_dir
+kb.framework.RaggedBatcher.batch_size = %batch_size
+
+kb.framework.meta_model_trainable.model_dir = %model_dir
 
 model_dir = @kb.path.model_dir()
 kb.path.model_dir.root_dir = '~/ecn'

@@ -41,6 +41,10 @@ def spatial_leaky_integrate_and_fire(
     reset_potential: float = -1.0,
     out_size: int = -1,
 ) -> Tuple[IntTensor, IntTensor]:
+    assert isinstance(times, tf.Tensor)
+    assert isinstance(coords, tf.Tensor)
+    assert isinstance(grid_indices, tf.Tensor)
+    assert isinstance(grid_splits, tf.Tensor)
 
     out_times, out_coords = tf.numpy_function(
         functools.partial(

@@ -86,13 +86,25 @@ def compute_neighbors(
     spatial_buffer_size: int,
     event_duration: Optional[int] = None,
 ) -> Tuple[IntTensor, IntTensor, IntTensor]:
+    assert isinstance(in_times, tf.Tensor)
+    assert isinstance(in_coords, tf.Tensor)
+    assert isinstance(out_times, tf.Tensor)
+    assert isinstance(out_coords, tf.Tensor)
+    assert isinstance(grid_partitions, tf.Tensor)
+    assert isinstance(grid_indices, tf.Tensor)
+    assert isinstance(grid_splits, tf.Tensor)
+    assert isinstance(spatial_buffer_size, int)
+    if event_duration is not None:
+        assert isinstance(event_duration, int)
+
+    fn = functools.partial(
+        _np_neigh.compute_neighbors,
+        event_duration=event_duration,
+        spatial_buffer_size=spatial_buffer_size,
+    )
     partitions, indices, splits = tf.numpy_function(
-        functools.partial(
-            _np_neigh.compute_neighbors,
-            event_duration=event_duration,
-            spatial_buffer_size=spatial_buffer_size,
-        ),
-        [
+        fn,
+        (
             in_times,
             in_coords,
             out_times,
@@ -100,8 +112,8 @@ def compute_neighbors(
             grid_partitions,
             grid_indices,
             grid_splits,
-        ],
-        [grid_partitions.dtype, grid_indices.dtype, grid_splits.dtype],
+        ),
+        (grid_partitions.dtype, grid_indices.dtype, grid_splits.dtype),
     )
     for t in (partitions, indices, splits):
         t.set_shape((None,))

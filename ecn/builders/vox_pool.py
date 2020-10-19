@@ -4,7 +4,7 @@ import gin
 import numpy as np
 import tensorflow as tf
 
-import multi_graph as mg
+import meta_model.pipeline as pl
 from ecn import components as comp
 from kblocks.keras import layers
 
@@ -44,21 +44,20 @@ def inception_vox_pooling(
     times = features["time"]
     coords = features["coords"]
     polarity = features["polarity"]
-    with mg.pre_cache_context():
-        if max_events is not None:
-            times = times[:max_events]
-            coords = coords[:max_events]
-            polarity = polarity[:max_events]
-        if initial_pooling is not None:
-            if grid_shape is not None:
-                grid_shape = tuple(g // initial_pooling for g in grid_shape)
-            coords = coords // initial_pooling
-        if recenter:
-            max_coords = tf.reduce_max(coords, axis=0)
-            offset = (tf.constant(grid_shape, dtype=coords.dtype) - max_coords) // 2
-            coords = coords + offset
-        times = times - times[0]
-        t_start = None
+    if max_events is not None:
+        times = times[:max_events]
+        coords = coords[:max_events]
+        polarity = polarity[:max_events]
+    if initial_pooling is not None:
+        if grid_shape is not None:
+            grid_shape = tuple(g // initial_pooling for g in grid_shape)
+        coords = coords // initial_pooling
+    if recenter:
+        max_coords = tf.reduce_max(coords, axis=0)
+        offset = (tf.constant(grid_shape, dtype=coords.dtype) - max_coords) // 2
+        coords = coords + offset
+    times = times - times[0]
+    t_start = None
 
     filters = filters0
     activation = tf.keras.activations.get(activation)
@@ -72,9 +71,8 @@ def inception_vox_pooling(
     in_stream: comp.SpatialStream = comp.SpatialStream(
         grid, times, coords, bucket_sizes=bucket_sizes
     )
-    with mg.pre_batch_context():
-        t_end = in_stream.cached_times[-1] + 1
-    t_end = mg.batch(t_end)
+    t_end = in_stream.cached_times[-1] + 1
+    t_end = pl.batch(t_end)
 
     out_stream = comp.spatial_leaky_integrate_and_fire(
         in_stream, link, decay_time=decay_time, bucket_sizes=bucket_sizes, **lif_kwargs,
@@ -214,8 +212,8 @@ def inception_vox_pooling(
         features = layers.Dropout(dropout_rate)(features)
     logits = layers.Dense(num_classes, activation=None, name="logits")(features)
 
-    labels = mg.batch(mg.cache(labels))
+    labels = pl.batch(pl.cache(labels))
     if weights is None:
         return logits, labels
-    weights = mg.batch(mg.cache(weights))
+    weights = pl.batch(pl.cache(weights))
     return logits, labels, weights

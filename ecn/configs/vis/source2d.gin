@@ -1,0 +1,16 @@
+import ecn.vis
+import kblocks.framework.sources
+
+main.fn = @kb.framework.run_data_source
+kb.framework.run_data_source.source = %base_source
+kb.framework.run_data_source.callback = @ecn.vis.vis_example2d
+
+ecn.vis.vis_example2d.flip_up_down = %flip_up_down
+ecn.vis.vis_example2d.reverse_xy = %reverse_xy
+ecn.vis.vis_example2d.fps = %fps
+ecn.vis.vis_example2d.num_frames = %num_frames
+
+fps = 16
+num_frames = 64
+reverse_xy = False
+flip_up_down = False

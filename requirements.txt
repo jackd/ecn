@@ -1,5 +1,6 @@
 absl-py
 tensorflow_datasets
-multi-graph@ git+git://github.com/jackd/multi-graph.git
+meta-model@ git+git://github.com/jackd/meta-model.git
+composite-layers@ git+git://github.com/jackd/composite-layers.git
 events-tfds@ git+git://github.com/jackd/events-tfds.git
 numba-stream@ git+git://github.com/jackd/numba-stream.git

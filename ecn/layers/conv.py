@@ -4,6 +4,7 @@ from typing import Callable, Iterable, Optional, Union
 import gin
 import tensorflow as tf
 
+from composite_layers.types import is_sparse
 from ecn.ops import conv as conv_ops
 
 FloatTensor = tf.Tensor
@@ -447,7 +448,7 @@ def spatio_temporal_event_conv(
     kwargs.update(dict(filters=filters, temporal_kernel_size=temporal_kernel_size))
     if features is None:
         return FeaturelessSpatioTemporalEventConv(**kwargs)(dt)
-    inputs = [features, dt] if isinstance(dt, tf.SparseTensor) else [features, *dt]
+    inputs = [features, dt] if is_sparse(dt) else [features, *dt]
     if features.dtype.is_bool:
         return BinarySpatioTemporalEventConv(**kwargs)(inputs)
     else:
@@ -464,7 +465,7 @@ def temporal_event_conv(
     kwargs.update(dict(filters=filters, temporal_kernel_size=temporal_kernel_size))
     if features is None:
         return FeaturelessTemporalEventConv(**kwargs)(dt)
-    inputs = [features, dt] if isinstance(dt, tf.SparseTensor) else [features, *dt]
+    inputs = [features, dt] if is_sparse(dt) else [features, *dt]
     if features.dtype.is_bool:
         return BinaryTemporalEventConv(**kwargs)(inputs)
     else:
