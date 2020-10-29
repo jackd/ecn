@@ -3,6 +3,8 @@ from typing import Callable, Optional, Sequence, Tuple, Union
 import numpy as np
 import tensorflow as tf
 
+import wtftf
+
 IntArray = np.ndarray
 
 IntTensor = tf.Tensor
@@ -20,7 +22,7 @@ def to_bool(maybe: MaybeBool) -> Union[bool, BoolTensor, FloatTensor]:
         if dtype.is_bool:
             return maybe
         elif dtype.is_floating:
-            return tf.random.uniform(()) < maybe
+            return wtftf.random.uniform(()) < maybe
         else:
             raise ValueError(
                 f"maybe must be a bool or float if a tensor, got dtype {maybe.dtype}"
@@ -28,7 +30,7 @@ def to_bool(maybe: MaybeBool) -> Union[bool, BoolTensor, FloatTensor]:
     elif isinstance(maybe, bool):
         return maybe
     else:
-        return tf.random.uniform(()) < maybe
+        return wtftf.random.uniform(()) < maybe
 
 
 def rotation2d_matrix(radians):
@@ -127,7 +129,7 @@ def augment(
 
     if rotate_limits is not None:
         min_rot, max_rot = rotate_limits
-        radians = tf.random.uniform((), minval=min_rot, maxval=max_rot)
+        radians = wtftf.random.uniform((), minval=min_rot, maxval=max_rot)
         dtype = coords.dtype
         coords = tf.cast(coords, tf.float32)
         coords = rotate2d(coords, radians, center=tf.cast(grid_shape, tf.float32) / 2)

@@ -1,0 +1,2 @@
+include 'nmnist.gin'
+include '../sources/nmnist-aug.gin'

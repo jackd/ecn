@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Callable, Sequence, Tuple, Union
 
 import gin
 import numpy as np
@@ -16,19 +16,19 @@ def inception_vox_pooling(
     features,
     labels,
     weights=None,
-    num_classes=10,
-    grid_shape=(128, 128),
-    decay_time=2000,
-    spatial_buffer=32,
-    reset_potential=-3.0,
-    threshold=1.5,
+    num_classes: int = 10,
+    grid_shape: Tuple[int, int] = (128, 128),
+    decay_time: int = 2000,
+    spatial_buffer: int = 32,
+    reset_potential: float = -3.0,
+    threshold: float = 1.5,
     filters0: int = 8,
     kt0: int = 4,
     hidden_units: Sequence[int] = (256,),
     dropout_rate: float = 0.5,
     decay_time_expansion_rate: float = 2.0,
     num_levels: int = 5,
-    activation="relu",
+    activation: Union[str, Callable] = "relu",
     bucket_sizes: bool = False,
     recenter: bool = True,
     vox_reduction: str = "mean",
@@ -65,7 +65,6 @@ def inception_vox_pooling(
     lif_kwargs = dict(reset_potential=reset_potential, threshold=threshold)
 
     grid = comp.Grid(grid_shape)
-    # link = grid.link((5, 5), (2, 2), (2, 2))
     link = grid.link((3, 3), (2, 2), (1, 1))
 
     in_stream: comp.SpatialStream = comp.SpatialStream(

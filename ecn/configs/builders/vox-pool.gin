@@ -4,5 +4,7 @@ import ecn.builders
 build_fn = @ecn.builders.inception_vox_pooling
 
 inception_vox_pooling.bucket_sizes = %bucket_sizes
+inception_vox_pooling.kt0 = %kt0
 
 model_id = 'vox-pool'
+kt0 = 4

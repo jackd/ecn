@@ -5,9 +5,10 @@ base_source = @Augmented2DSource()
 Augmented2DSource.flip_time = 0.5
 
 kb.cache.cache_managers.train_impl = @kb.cache.RepeatCacheManager
-
-RepeatCacheManager.manager_impl = @TFRecordsCacheManager
-
+RepeatCacheManager.manager_impl = %cache_manager_impl
 RepeatCacheManager.num_repeats = %cache_repeats
 cache_repeats = 4
-BaseCacheManager.preprocess = True
+
+BaseCacheManager.preprocess = %preprocess
+SnapshotManager.preprocess = %preprocess
+preprocess = True

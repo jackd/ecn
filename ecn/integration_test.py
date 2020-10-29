@@ -7,7 +7,7 @@ import tensorflow as tf
 import ecn.builders as builders
 import ecn.sources as sources
 from kblocks.framework.batchers import RaggedBatcher
-from kblocks.framework.meta_model import meta_model_trainable
+from kblocks.framework.meta_models import meta_model_trainable
 from kblocks.framework.sources import DataSource, DelegatingSource, Split
 
 Lambda = tf.keras.layers.Lambda
@@ -38,26 +38,25 @@ class IntegrationTest(tf.test.TestCase):
         model = single.model
         outs_single = []
         labels_single = []
-        with tf.keras.backend.learning_phase_scope(False):
-            for features, labels in single.source.get_dataset("train"):
-                outs_single.append(model(features))
-                labels_single.append(labels)
-            assert len(outs_single) == 2
-            outs_single = tf.nest.map_structure(
-                lambda *args: tf.concat(args, axis=0).numpy(), *outs_single
-            )
-            labels_single = tf.nest.map_structure(
-                lambda *args: tf.concat(args, axis=0).numpy(), *labels_single
-            )
+        for features, labels in single.source.get_dataset("train"):
+            outs_single.append(model(features))
+            labels_single.append(labels)
+        assert len(outs_single) == 2
+        outs_single = tf.nest.map_structure(
+            lambda *args: tf.concat(args, axis=0).numpy(), *outs_single
+        )
+        labels_single = tf.nest.map_structure(
+            lambda *args: tf.concat(args, axis=0).numpy(), *labels_single
+        )
 
-            outs_double = None
-            labels_double = None
-            for (features, labels,) in double.source.get_dataset("train"):
-                assert outs_double is None  # ensure only loops once
-                (outs_double, labels_double) = tf.nest.map_structure(
-                    lambda x: x.numpy(), (model(features), labels)
-                )
-            assert outs_double is not None  # ensure only loops once
+        outs_double = None
+        labels_double = None
+        for (features, labels,) in double.source.get_dataset("train"):
+            assert outs_double is None  # ensure only loops once
+            (outs_double, labels_double) = tf.nest.map_structure(
+                lambda x: x.numpy(), (model(features), labels)
+            )
+        assert outs_double is not None  # ensure only loops once
 
         assert_allclose = functools.partial(
             np.testing.assert_allclose, rtol=1e-4, atol=1e-4

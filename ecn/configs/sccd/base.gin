@@ -3,7 +3,7 @@ import kblocks.extras.cache
 import kblocks.extras.cache.tfrecords
 import kblocks.framework.batchers
 import kblocks.framework.compilers
-import kblocks.framework.meta_model
+import kblocks.framework.meta_models
 import kblocks.keras.optimizers
 import kblocks.path
 
@@ -34,8 +34,9 @@ kb.framework.PipelinedSource.cache_managers = @kb.cache.cache_managers()
 kb.framework.PipelinedSource.shuffle_buffer = %shuffle_buffer
 kb.cache.BaseCacheManager.preprocess = True
 kb.cache.cache_managers.root_dir = @cache/kb.path.model_dir()
-kb.cache.cache_managers.train_impl = @TFRecordsCacheManager
-kb.cache.cache_managers.validation_impl = @TFRecordsCacheManager
+kb.cache.cache_managers.train_impl = %cache_manager_impl
+kb.cache.cache_managers.validation_impl = %cache_manager_impl
+cache_manager_impl = @kb.cache.TFRecordsCacheManager
 kb.cache.TFRecordsCacheManager.compression = 'GZIP'
 cache/kb.path.model_dir.run = None
 cache/kb.path.model_dir.variant_id = 'cache'

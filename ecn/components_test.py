@@ -77,32 +77,30 @@ class ComponentsTest(tf.test.TestCase, parameterized.TestCase):
         single_out = []
         single_labels = []
         single_weights = []
-        # ensure no batch norm effects
-        with tf.keras.backend.learning_phase_scope(False):
-            for features, labels, weights in single:
-                out = model(features)
-                single_out.append(as_tuple(out))
-                single_labels.append(as_tuple(labels))
-                single_weights.append(as_tuple(weights))
+        for features, labels, weights in single:
+            out = model(features)
+            single_out.append(as_tuple(out))
+            single_labels.append(as_tuple(labels))
+            single_weights.append(as_tuple(weights))
 
-            single_out = tf.nest.map_structure(
-                lambda *args: tf.concat(args, axis=0).numpy(), *single_out
-            )
-            single_labels = tf.nest.map_structure(
-                lambda *args: tf.concat(args, axis=0).numpy(), *single_labels
-            )
-            single_weights = tf.nest.map_structure(
-                lambda *args: tf.concat(args, axis=0).numpy(), *single_weights
-            )
+        single_out = tf.nest.map_structure(
+            lambda *args: tf.concat(args, axis=0).numpy(), *single_out
+        )
+        single_labels = tf.nest.map_structure(
+            lambda *args: tf.concat(args, axis=0).numpy(), *single_labels
+        )
+        single_weights = tf.nest.map_structure(
+            lambda *args: tf.concat(args, axis=0).numpy(), *single_weights
+        )
 
-            double_out = None
-            double_labels = None
-            double_weights = None
-            for features, labels, weights in double:
-                assert double_out is None
-                (double_out, double_labels, double_weights) = tf.nest.map_structure(
-                    lambda x: as_tuple(x.numpy()), (model(features), labels, weights)
-                )
+        double_out = None
+        double_labels = None
+        double_weights = None
+        for features, labels, weights in double:
+            assert double_out is None
+            (double_out, double_labels, double_weights) = tf.nest.map_structure(
+                lambda x: as_tuple(x.numpy()), (model(features), labels, weights)
+            )
 
         assert_allclose = functools.partial(np.testing.assert_allclose, rtol=1e-4)
         tf.nest.map_structure(assert_allclose, single_out, double_out)

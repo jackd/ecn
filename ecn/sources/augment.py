@@ -1,9 +1,10 @@
-from typing import Optional, Tuple
+from typing import Mapping, Optional, Tuple
 
 import gin
 import numpy as np
 import tensorflow as tf
 
+import wtftf
 from ecn.ops import augment as augment_ops
 from ecn.ops.augment import MaybeBool
 from kblocks.framework.sources import DataSource, DelegatingSource, Split
@@ -24,6 +25,7 @@ class Augmented2DSource(DelegatingSource):
         rotate_limits: Optional[Tuple[float, float]] = DEFAULT_ROTATE_LIMITS,
         num_parallel_calls: int = AUTOTUNE,
     ):
+        self._rng = tf.random.Generator.from_seed(0)
         super().__init__(base=base)
         self._rotate_limits = rotate_limits
         self._num_parallel_calls = num_parallel_calls
@@ -34,6 +36,10 @@ class Augmented2DSource(DelegatingSource):
             rotate_limits=rotate_limits,
         )
 
+    @property
+    def modules(self) -> Mapping[str, tf.Module]:
+        return {"rng": self._rng}
+
     def get_dataset(self, split: Split):
         dataset = super().get_dataset(split)
         if split == "train":
@@ -42,13 +48,14 @@ class Augmented2DSource(DelegatingSource):
                 time = features["time"]
                 coords = features["coords"]
                 polarity = features["polarity"]
-                time, coords, polarity, _ = augment_ops.augment(
-                    time,
-                    coords,
-                    polarity,
-                    grid_shape=self.meta["grid_shape"],
-                    **self._map_params
-                )
+                with wtftf.random.global_generator_context(self._rng):
+                    time, coords, polarity, _ = augment_ops.augment(
+                        time,
+                        coords,
+                        polarity,
+                        grid_shape=self.meta["grid_shape"],
+                        **self._map_params
+                    )
 
                 features.update(dict(time=time, coords=coords, polarity=polarity))
                 return (
