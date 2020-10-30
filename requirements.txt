@@ -5,4 +5,4 @@ composite-layers@ git+git://github.com/jackd/composite-layers.git
 events-tfds@ git+git://github.com/jackd/events-tfds.git
 numba-stream@ git+git://github.com/jackd/numba-stream.git
 wtftf@ git+git://github.com/jackd/wtftf.git
-kblocks@ git+git://github.com/jackd/kblocks.git@dev
+kblocks@ git+git://github.com/jackd/kblocks.git@v0.1.0
