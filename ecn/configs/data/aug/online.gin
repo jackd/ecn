@@ -1,0 +1,4 @@
+# turn off caching
+cache_dir = None
+cache_repeats = None
+cache_factory = None

@@ -26,7 +26,7 @@ def compute_pooled_neighbors(
         [in_times.dtype] * 2,
     )
     for t in indices, splits:
-        t.set_shape((None,))
+        t.set_shape([None])
     return indices, splits
 
 
@@ -48,7 +48,7 @@ def compute_full_neighbors(
         [in_times.dtype] * 3,
     )
     for t in partitions, indices, splits:
-        t.set_shape((None,))
+        t.set_shape([None])
     return partitions, indices, splits
 
 
@@ -71,7 +71,7 @@ def compute_pointwise_neighbors(
         [in_times.dtype] * 2,
     )
     for t in indices, splits:
-        t.set_shape((None,))
+        t.set_shape([None])
     return indices, splits
 
 
@@ -86,13 +86,13 @@ def compute_neighbors(
     spatial_buffer_size: int,
     event_duration: Optional[int] = None,
 ) -> Tuple[IntTensor, IntTensor, IntTensor]:
-    assert isinstance(in_times, tf.Tensor)
-    assert isinstance(in_coords, tf.Tensor)
-    assert isinstance(out_times, tf.Tensor)
-    assert isinstance(out_coords, tf.Tensor)
-    assert isinstance(grid_partitions, tf.Tensor)
-    assert isinstance(grid_indices, tf.Tensor)
-    assert isinstance(grid_splits, tf.Tensor)
+    assert tf.is_tensor(in_times)
+    assert tf.is_tensor(in_coords)
+    assert tf.is_tensor(out_times)
+    assert tf.is_tensor(out_coords)
+    assert tf.is_tensor(grid_partitions)
+    assert tf.is_tensor(grid_indices)
+    assert tf.is_tensor(grid_splits)
     assert isinstance(spatial_buffer_size, int)
     if event_duration is not None:
         assert isinstance(event_duration, int)
@@ -116,5 +116,5 @@ def compute_neighbors(
         (grid_partitions.dtype, grid_indices.dtype, grid_splits.dtype),
     )
     for t in (partitions, indices, splits):
-        t.set_shape((None,))
+        t.set_shape([None])
     return partitions, indices, splits

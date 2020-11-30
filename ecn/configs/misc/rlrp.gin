@@ -1,7 +1,12 @@
+import kblocks.experiments.fit
 import kblocks.keras.callbacks
 
-kb.framework.fit.callbacks = [@tf.keras.callbacks.ReduceLROnPlateau()]
-ReduceLROnPlateau.patience = 10
-ReduceLROnPlateau.factor = 0.2
-ReduceLROnPlateau.monitor = 'sparse_categorical_accuracy'
-ReduceLROnPlateau.mode = 'max'
+tf.keras.callbacks.ReduceLROnPlateau.patience = 10
+tf.keras.callbacks.ReduceLROnPlateau.factor = 0.2
+tf.keras.callbacks.ReduceLROnPlateau.monitor = %monitor
+tf.keras.callbacks.ReduceLROnPlateau.mode = %mode
+
+monitor = 'sparse_categorical_accuracy'  # training accuracy
+mode = 'max'
+
+kb.experiments.model_callbacks.reduce_lr_on_plateau_module = True

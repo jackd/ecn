@@ -1,0 +1,16 @@
+import ecn.data
+
+include "$KB_CONFIG/utils/tfds.gin"
+include "$KB_CONFIG/compilers/classification.gin"
+include "$ECN_CONFIG/data/aug/core.gin"
+
+tfds_name = "asl-dvs"
+grid_shape = %ASL_DVS_GRID_SHAPE
+num_classes = %ASL_DVS_NUM_CLASSES
+
+train_split = 'train[:80%]'
+validation_split = 'train[80%:]'
+
+flip_ud = True  # not augmentation - it's just upside down
+
+problem_id = 'asl-dvs'

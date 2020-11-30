@@ -1,12 +1,16 @@
-include 'base.gin'
-include '../builders/vox-pool.gin'
-include '../sources/nmnist-aug-inf.gin'
-include '../misc/rlrp.gin'
+include '$ECN_CONFIG/sccd/base.gin'
+include '$ECN_CONFIG/builders/vox-pool.gin'
+include '$ECN_CONFIG/data/nmnist.gin'
+include '$ECN_CONFIG/data/aug/online.gin'
+
+include '$ECN_CONFIG/misc/rlrp.gin'
+
+batch_size = 32
+epochs = 500
+shuffle_buffer = 1024
 
 inception_vox_pooling.num_levels = 3
 inception_vox_pooling.vox_start = 0
 inception_vox_pooling.filters0 = 32
-
-epochs = 500
 
 variant_id = 'sccd'

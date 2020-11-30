@@ -1,6 +1,0 @@
-import ecn.vis
-
-main.fn = @ecn.vis.vis_streams1d
-
-ecn.vis.vis_streams1d.build_fn = %build_fn
-ecn.vis.vis_streams1d.base_source = %base_source

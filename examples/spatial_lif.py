@@ -1,3 +1,4 @@
+"""Attempts to visualize event connectedness."""
 import collections
 
 import matplotlib.pyplot as plt

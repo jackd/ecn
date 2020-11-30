@@ -1,7 +1,12 @@
-from ecn import sources, vis
+import functools
+
+import tensorflow_datasets as tfds
+
+from ecn import vis
+from ecn.ops.augment import augment_event_dataset
+from events_tfds.events import asl_dvs
 
 reverse_xy = False
-flip_up_down = False
 
 # base_source = sources.nmnist_source()
 # aug_kwargs = dict(flip_time=0.5)
@@ -13,24 +18,8 @@ flip_up_down = False
 # base_source = sources.ncaltech101_source()
 # aug_kwargs = dict(flip_time=0.5, flip_lr=True)
 
-# base_source = sources.ncars_source()
-# aug_kwargs = dict(flip_time=False, flip_ud=True)
+dataset = tfds.load("asl_dvs", split="train", as_supervised=True)
+aug_kwargs = dict(grid_shape=asl_dvs.GRID_SHAPE, flip_ud=True, flip_time=0.5)
 
-base_source = sources.asl_dvs_source()
-aug_kwargs = dict()
-flip_up_down = True
-
-
-aug_source = sources.Augmented2DSource(
-    base_source,
-    **aug_kwargs,
-    # rotate_limits=(-np.pi, np.pi),  # exaggerate
-)
-for source in (base_source, aug_source):
-    print(source.epoch_length("train"))
-    print(source.epoch_length("validation"))
-
-for example in aug_source.get_dataset("train"):
-    vis.vis_example(
-        example, num_frames=16, fps=4, reverse_xy=reverse_xy, flip_up_down=flip_up_down
-    )
+for example in dataset.map(functools.partial(augment_event_dataset, **aug_kwargs)):
+    vis.vis_example2d(example, num_frames=16, fps=4, reverse_xy=reverse_xy)

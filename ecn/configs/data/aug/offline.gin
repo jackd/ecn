@@ -1,0 +1,21 @@
+import kblocks.data.cache
+import kblocks.path
+
+cache_dir = @os.path.join()
+cache_dir/os.path.join.a = %family_dir
+cache_dir/os.path.join.p = 'cache'
+
+kb.data.snapshot.compression = %compression
+kb.data.save_load_cache.compression = %compression
+kb.data.tfrecords_cache.compression = %compression
+
+# lazy caching, but possible memory leak?
+# cache_factory = @kb.data.snapshot
+
+# eager, possible memory leak here too?
+# cache_factory = @kb.data.save_load_cache
+
+# eager, about 3x as slow initially as save/load
+cache_factory = @kb.data.tfrecords_cache
+
+compression = "GZIP"

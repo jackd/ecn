@@ -1,3 +1,0 @@
-include 'cifar10-aug.gin'
-cache_repeats = 8
-problem_id = 'cifar10-aug8'

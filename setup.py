@@ -7,7 +7,7 @@ with open("requirements.txt") as fp:
 
 setup(
     name="ecn",
-    version="0.1.0",
+    version="0.3.0",
     description="Event Convolutional Networks for tensorflow",
     url="https://github.com/jackd/ecn.git",
     author="Dominic Jack",

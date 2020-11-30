@@ -1,12 +1,9 @@
 import numpy as np
 import tensorflow as tf
+import tensorflow_datasets as tfds
 from tqdm import tqdm
 
-from ecn import sources
-
-source = sources.asl_dvs_source()
-
-total = source.epoch_length("train")
+import events_tfds.events.asl_dvs  # pylint: disable=unused-import
 
 
 def map_fn(events, labels):
@@ -16,7 +13,9 @@ def map_fn(events, labels):
 
 batch_size = 128
 
-dataset = source.get_dataset("train").map(map_fn, -1).batch(batch_size)
+dataset = tfds.load("asl_dvs", split="train", as_supervised=True).map(map_fn, -1)
+total = len(dataset)
+dataset = dataset.batch(batch_size)
 out = np.zeros((total,), dtype=np.int64)
 for i, example in enumerate(tqdm(dataset, total=total // batch_size + 1)):
     out[i * batch_size : (i + 1) * batch_size] = example.numpy()
