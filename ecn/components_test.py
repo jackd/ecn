@@ -12,13 +12,6 @@ from meta_model.batchers import RaggedBatcher
 Lambda = tf.keras.layers.Lambda
 
 
-def get_cached_dataset(source, num_examples=2):
-    out = source.get_dataset("train").take(num_examples).cache()
-    for _ in out:
-        pass
-    return out
-
-
 def feature_inputs(features, stream, features_type="none"):
     if features_type == "none":
         return None
@@ -59,16 +52,16 @@ class ComponentsTest(tf.test.TestCase, parameterized.TestCase):
         )
         assert model is not None
         single = (
-            dataset.map(pipeline.pre_cache_map)
-            .map(pipeline.pre_batch_map)
+            dataset.map(pipeline.pre_cache_map_func())
+            .map(pipeline.pre_batch_map_func())
             .apply(tf.data.experimental.dense_to_ragged_batch(1))
-            .map(pipeline.post_batch_map)
+            .map(pipeline.post_batch_map_func())
         )
         double = (
-            dataset.map(pipeline.pre_cache_map)
-            .map(pipeline.pre_batch_map)
+            dataset.map(pipeline.pre_cache_map_func())
+            .map(pipeline.pre_batch_map_func())
             .apply(tf.data.experimental.dense_to_ragged_batch(2))
-            .map(pipeline.post_batch_map)
+            .map(pipeline.post_batch_map_func())
         )
 
         def as_tuple(x):

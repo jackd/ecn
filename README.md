@@ -23,7 +23,7 @@ python -m ecn '$ECN_CONFIG/vis/streams2d.gin' '$ECN_CONFIG/sccd/nmnist.gin'
 or the event neighborhoods with
 
 ```bash
-python -m ecn '$ECN_CONFIG/vis/adj.gin' '$ECN_CONFIG/data/nmnist.gin'
+python -m ecn '$ECN_CONFIG/vis/adj.gin' '$ECN_CONFIG/sccd/nmnist.gin'
 ```
 
 ## Saved Data

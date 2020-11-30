@@ -88,8 +88,8 @@ def complex_split(x):
 @tf.custom_gradient
 def _csr_matmul(indices: tf.Tensor, values: tf.Tensor, dense_shape, b: tf.Tensor):
     try:
-        from tensorflow.python.ops.linalg.sparse import (
-            sparse as sparse_lib,  # pylint: disable=import-outside-toplevel
+        from tensorflow.python.ops.linalg.sparse import (  # pylint: disable=import-outside-toplevel
+            sparse as sparse_lib,
         )
     except ImportError as e:
         raise ImportError("use_csr requires tensorflow >= 2.3") from e
@@ -165,7 +165,11 @@ def featureless_temporal_event_conv(
     decay.shape.assert_has_rank(1)
     assert kernel.shape[0] == decay.shape[0]
 
-    assert isinstance(dt.type_spec, tf.SparseTensorSpec)
+    assert (
+        isinstance(dt, tf.SparseTensor)
+        or tf.keras.backend.is_keras_tensor(dt)
+        and isinstance(dt.type_spec, tf.SparseTensorSpec)
+    )
     dt.shape.assert_has_rank(2)
     values = tf.exp(
         -tf.expand_dims(decay, axis=0) * tf.expand_dims(dt.values, axis=-1)
