@@ -1,9 +1,10 @@
 from typing import Callable, Optional, Sequence, Tuple, Union
 
+import gin
 import numpy as np
 import tensorflow as tf
 
-import wtftf
+import tfrng
 
 IntArray = np.ndarray
 
@@ -22,7 +23,7 @@ def to_bool(maybe: MaybeBool) -> Union[bool, BoolTensor, FloatTensor]:
         if dtype.is_bool:
             return maybe
         elif dtype.is_floating:
-            return wtftf.random.uniform(()) < maybe
+            return tfrng.uniform(()) < maybe
         else:
             raise ValueError(
                 f"maybe must be a bool or float if a tensor, got dtype {maybe.dtype}"
@@ -30,7 +31,7 @@ def to_bool(maybe: MaybeBool) -> Union[bool, BoolTensor, FloatTensor]:
     elif isinstance(maybe, bool):
         return maybe
     else:
-        return wtftf.random.uniform(()) < maybe
+        return tfrng.uniform(()) < maybe
 
 
 def rotation2d_matrix(radians):
@@ -129,7 +130,7 @@ def augment(
 
     if rotate_limits is not None:
         min_rot, max_rot = rotate_limits
-        radians = wtftf.random.uniform((), minval=min_rot, maxval=max_rot)
+        radians = tfrng.uniform((), minval=min_rot, maxval=max_rot)
         dtype = coords.dtype
         coords = tf.cast(coords, tf.float32)
         coords = rotate2d(coords, radians, center=tf.cast(grid_shape, tf.float32) / 2)
@@ -140,3 +141,14 @@ def augment(
         polarity = tf.boolean_mask(polarity, mask)
 
     return time, coords, polarity, mask
+
+
+@gin.configurable(module="ecn")
+def augment_event_dataset(features, labels=None, sample_weight=None, **kwargs):
+    time = features["time"]
+    coords = features["coords"]
+    polarity = features["polarity"]
+    time, coords, polarity, mask = augment(time, coords, polarity, **kwargs)
+    del mask
+    features = dict(time=time, coords=coords, polarity=polarity)
+    return tf.keras.utils.pack_x_y_sample_weight(features, labels, sample_weight)

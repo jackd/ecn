@@ -10,20 +10,19 @@ import ecn.components as comp
 import events_tfds.vis.anim as anim
 import meta_model.pipeline as pl
 from events_tfds.vis.image import as_frame, as_frames
-from kblocks.framework.batchers import RaggedBatcher
-from kblocks.framework.sources import DataSource
+from meta_model.utils import ModelMap
 
 
 def _get_cached_stream_dataset(
-    build_fn: Callable, base_source: DataSource, num_dims: int
+    meta_model_func: Callable, dataset: tf.data.Dataset, num_dims: int
 ):
-    batcher = RaggedBatcher(batch_size=1)
-    builder = pl.PipelinedModelBuilder(base_source.element_spec, batcher=batcher)
+    batcher = tf.data.experimental.dense_to_ragged_batch(batch_size=1)
+    builder = pl.PipelinedModelBuilder(dataset.element_spec, batcher=batcher)
     with builder:
         with comp.stream_accumulator() as streams:
             inputs = builder.pre_cache_inputs
             logging.info("Building meta model...")
-            build_fn(*inputs, **base_source.meta)
+            meta_model_func(*inputs)
             logging.info("Successfully built!")
         times = []
         coords = []
@@ -41,24 +40,29 @@ def _get_cached_stream_dataset(
         outputs = (tuple(times), tuple(coords))
         if has_polarity:
             polarity = inputs[0]["polarity"]
-            outputs = (tuple(outputs), polarity)
+            outputs = (*outputs, polarity)
 
-    map_fn = builder.build_pre_cache_map(outputs)
+    dataset = dataset.map(ModelMap(builder.build_pre_cache_model(outputs)))
 
     del builder
-    dataset = base_source.get_dataset("train").map(map_fn)
     return dataset, static_shapes
 
 
-def _get_cached_adjacency_dataset(build_fn: Callable, base_source: DataSource):
-    batcher = RaggedBatcher(batch_size=1)
-    builder = pl.PipelinedModelBuilder(base_source.element_spec, batcher=batcher)
+def _get_cached_adjacency_dataset(
+    meta_model_func: Callable,
+    dataset: tf.data.Dataset,
+    augment_func: Optional[Callable] = None,
+):
+    if augment_func is not None:
+        dataset = dataset.map(augment_func)
+    batcher = tf.data.experimental.dense_to_ragged_batch(batch_size=1)
+    builder = pl.PipelinedModelBuilder(dataset.element_spec, batcher=batcher)
     with builder:
         with comp.stream_accumulator() as streams:
             with comp.convolver_accumulator() as convolvers:
                 inputs = builder.pre_cache_inputs
                 logging.info("Building multi graph...")
-                build_fn(*inputs, **base_source.meta)
+                meta_model_func(*inputs)
                 logging.info("Successfully built!")
         stream_indices = {s: i for i, s in enumerate(streams)}
         outputs = []
@@ -71,14 +75,15 @@ def _get_cached_adjacency_dataset(build_fn: Callable, base_source: DataSource):
             outputs.append((c.indices, c.splits, c.in_stream.times, c.out_stream.times))
             decay_times.append(c.decay_time)
 
-    dataset = base_source.get_dataset("train").map(builder.build_pre_cache_map(outputs))
+    dataset = dataset.map(ModelMap(builder.build_pre_cache_model(outputs)))
     return dataset, decay_times, stream_indices, len(convolvers)
 
 
 @gin.configurable(module="ecn.vis")
 def vis_streams2d(
-    build_fn: Callable,
-    base_source: DataSource,
+    meta_model_func: Callable,
+    dataset: tf.data.Dataset,
+    augment_func: Optional[Callable] = None,
     num_frames: int = 20,
     fps: int = 4,
     group_size: int = 1,
@@ -89,7 +94,7 @@ def vis_streams2d(
     Visualize 2D event streams.
 
     Args:
-        build_fn: meta-model building function
+        meta_model_func: meta-model building function
         base_source: base data source
         num_frames: number of frames in the final animation.
         fps: frame-rate
@@ -99,15 +104,19 @@ def vis_streams2d(
             be printed to screen.
         flip_up_down: if True, flips images in the final animation up/down.
     """
+    if augment_func is not None:
+        dataset = dataset.map(augment_func)
     dataset, static_shapes = _get_cached_stream_dataset(
-        build_fn, base_source, num_dims=2
+        meta_model_func, dataset, num_dims=2
     )
+    print(static_shapes)
 
     sizes = np.zeros((group_size, len(static_shapes)), dtype=np.int64)
     for i, example in enumerate(dataset):
         example = tf.nest.map_structure(lambda x: x.numpy(), example)
+
         if len(example) == 3:
-            (times, coords), polarity = example
+            times, coords, polarity = example
         else:
             times, coords = example
             polarity = None
@@ -140,35 +149,39 @@ def vis_streams2d(
         )
 
 
+# @gin.configurable(module="ecn.vis")
+# def vis_streams1d(meta_model_func: Callable, dataset: tf.data.Dataset):
+#     """Visualize 1D event streams."""
+#     dataset, static_shapes = vis_streams1d(meta_model_func, base_source, num_dims=1)
+#     print("num_channels: {}".format([shape[0] for shape in static_shapes]))
+#     for example in dataset:
+#         example = tf.nest.map_structure(lambda x: x.numpy(), example)
+#         if len(example) == 3:
+#             times, coords, polarity = example
+#         else:
+#             times, coords = example
+#             polarity = None
+#         del polarity
+
+#         print("Sizes: {}".format([t.shape[0] for t in times]))
+#         xys = []
+#         for (t, c, shape) in zip(times, coords, static_shapes):
+#             (size,) = shape
+#             c = np.squeeze(c, axis=-1)
+#             assert np.max(c) < size
+#             xys.append(((c + 0.5) / size, t))
+#         plt.figure()
+#         for i, xy in enumerate(xys):
+#             plt.scatter(*xy, s=(i + 1))
+#         plt.show()
+
+
 @gin.configurable(module="ecn.vis")
-def vis_streams1d(build_fn: Callable, base_source: DataSource):
-    """Visualize 1D event streams."""
-    dataset, static_shapes = vis_streams1d(build_fn, base_source, num_dims=1)
-    print("num_channels: {}".format([shape[0] for shape in static_shapes]))
-    for example in dataset:
-        example = tf.nest.map_structure(lambda x: x.numpy(), example)
-        if len(example) == 3:
-            times, coords, polarity = example
-        else:
-            times, coords = example
-            polarity = None
-        del polarity
-
-        print("Sizes: {}".format([t.shape[0] for t in times]))
-        xys = []
-        for (t, c, shape) in zip(times, coords, static_shapes):
-            (size,) = shape
-            c = np.squeeze(c, axis=-1)
-            assert np.max(c) < size
-            xys.append(((c + 0.5) / size, t))
-        plt.figure()
-        for i, xy in enumerate(xys):
-            plt.scatter(*xy, s=(i + 1))
-        plt.show()
-
-
-@gin.configurable(module="ecn.vis")
-def vis_adjacency(build_fn: Callable, base_source: DataSource) -> None:
+def vis_adjacency(
+    meta_model_func: Callable,
+    dataset: tf.data.Dataset,
+    augment_func: Optional[Callable] = None,
+) -> None:
     """
     Visualize sparse adjacency matrices.
 
@@ -176,11 +189,13 @@ def vis_adjacency(build_fn: Callable, base_source: DataSource) -> None:
     where values are given by `exp(-dt / decay_time)`.
 
     Args:
-        build_fn: meta-model build function, mapping base_source inputs to outputs.
-            The actual outputs are ignored. Streams are recorded as they are created
-            and the relevant adjacency matrices extracted.
-        base_source (DataSource): data source used ot create meta-models.
+        meta_model_func: meta-model build function, mapping base_source inputs to
+            outputs. The actual outputs are ignored. Streams are recorded as they are
+            created and the relevant adjacency matrices extracted.
+        dataset: tf.data.Dataset used ot create meta-models.
     """
+    if augment_func is not None:
+        dataset = dataset.map(augment_func)
 
     def _vis_single_adjacency(
         indices, splits, in_times, out_times, decay_time, ax0, ax1
@@ -203,7 +218,7 @@ def vis_adjacency(build_fn: Callable, base_source: DataSource) -> None:
         ax1.hist(values)
 
     dataset, decay_times, stream_indices, nc = _get_cached_adjacency_dataset(
-        build_fn, base_source
+        meta_model_func, dataset
     )
     for convolvers in dataset:
         convolvers = tf.nest.map_structure(lambda c: c.numpy(), convolvers)
@@ -221,7 +236,7 @@ def vis_adjacency(build_fn: Callable, base_source: DataSource) -> None:
 
 
 @gin.configurable(module="ecn.vis")
-def vis_exampled2d(
+def vis_example2d(
     example,
     num_frames: int = 20,
     fps: int = 4,

@@ -1,4 +1,0 @@
-include 'ncaltech101-aug2.gin'
-cache_repeats = 8
-
-problem_id = 'ncaltech101-aug8'

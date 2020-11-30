@@ -1,0 +1,15 @@
+import ecn.ops.augment
+
+train_augment_func = @train/ecn.augment_event_dataset
+validation = @validation/ecn.augment_event_dataset
+
+train/ecn.augment_event_dataset.flip_time = %flip_time
+train/ecn.augment_event_dataset.flip_lr = %flip_lr
+train/ecn.augment_event_dataset.flip_ud = %flip_ud
+train/ecn.augment_event_dataset.rotate_limits = %rotate_limits
+train/ecn.augment_event_dataset.grid_shape = %grid_shape
+
+flip_time = False
+flip_lr = False
+flip_ud = False
+rotate_limits = None

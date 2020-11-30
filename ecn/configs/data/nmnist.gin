@@ -1,0 +1,17 @@
+import ecn.data
+
+include "$KB_CONFIG/utils/tfds.gin"
+include "$KB_CONFIG/compilers/classification.gin"
+include "$ECN_CONFIG/data/aug/core.gin"
+
+tfds_name = "nmnist"
+grid_shape = %NMNIST_GRID_SHAPE
+num_classes = %NMNIST_NUM_CLASSES
+
+train_split = 'train'
+validation_split = 'test'
+
+flip_time = 0.5
+rotate_limits = (%NEG_PI_ON_8, %PI_ON_8)
+
+problem_id = 'nmnist'

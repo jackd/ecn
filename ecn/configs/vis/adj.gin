@@ -1,6 +1,8 @@
 import ecn.vis
+import kblocks.data
 
 main.fn = @ecn.vis.vis_adjacency
 
-ecn.vis.vis_adjacency.build_fn = %build_fn
-ecn.vis.vis_adjacency.base_source = %base_source
+ecn.vis.vis_adjacency.meta_model_func = %meta_model_func
+ecn.vis.vis_adjacency.dataset = %train_data
+ecn.vis.vis_adjacency.augment_func = %train_augment_func

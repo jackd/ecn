@@ -1,8 +1,0 @@
-import ecn.sources
-
-base_source = @cifar10_dvs_source()
-batch_size = 8
-epochs = 100
-shuffle_buffer = 128
-
-problem_id = 'cifar10'

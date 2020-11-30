@@ -27,7 +27,7 @@ def leaky_integrate_and_fire(
         (times,),
         times.dtype,
     )
-    out_times.set_shape((None,))
+    out_times.set_shape([None])
     return out_times
 
 
@@ -41,10 +41,10 @@ def spatial_leaky_integrate_and_fire(
     reset_potential: float = -1.0,
     out_size: int = -1,
 ) -> Tuple[IntTensor, IntTensor]:
-    assert isinstance(times, tf.Tensor)
-    assert isinstance(coords, tf.Tensor)
-    assert isinstance(grid_indices, tf.Tensor)
-    assert isinstance(grid_splits, tf.Tensor)
+    assert tf.is_tensor(times)
+    assert tf.is_tensor(coords)
+    assert tf.is_tensor(grid_indices)
+    assert tf.is_tensor(grid_splits)
 
     out_times, out_coords = tf.numpy_function(
         functools.partial(
@@ -57,6 +57,6 @@ def spatial_leaky_integrate_and_fire(
         (times, coords, grid_indices, grid_splits),
         (times.dtype, coords.dtype),
     )
-    out_times.set_shape((None,))
-    out_coords.set_shape((None,))
+    out_times.set_shape([None])
+    out_coords.set_shape([None])
     return out_times, out_coords

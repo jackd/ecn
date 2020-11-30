@@ -1,59 +1,32 @@
-import ecn.layers.conv
-import kblocks.extras.cache
-import kblocks.extras.cache.tfrecords
-import kblocks.framework.batchers
-import kblocks.framework.compilers
-import kblocks.framework.meta_models
+include "$KB_CONFIG/utils/deterministic.gin"
+include "$KB_CONFIG/utils/path.gin"
+include "$KB_CONFIG/trainables/factories/build-meta-model.gin"
+
+import kblocks.data
+import kblocks.experiments.fit
 import kblocks.keras.optimizers
+import kblocks.logical
 import kblocks.path
 
-trainable = @kb.framework.meta_model_trainable()
-kb.framework.meta_model_trainable.build_fn = %build_fn
-kb.framework.meta_model_trainable.base_source = %base_source
-kb.framework.meta_model_trainable.batcher = @kb.framework.RaggedBatcher()
-kb.framework.meta_model_trainable.compiler = %compiler
-
-kb.framework.RaggedBatcher.batch_size = %batch_size
-
-kb.framework.meta_model_trainable.model_dir = %model_dir
-
-model_dir = @kb.path.model_dir()
-kb.path.model_dir.root_dir = '~/ecn'
-kb.path.model_dir.problem_id = %problem_id
-kb.path.model_dir.model_id = %model_id
-kb.path.model_dir.variant_id = %variant_id
-kb.path.model_dir.run = %run
-
-ecn.layers.SpatioTemporalEventConv.use_csr = %use_csr
-ecn.layers.TemporalEventConv.use_csr = %use_csr
-
-use_csr = False
-
-kb.framework.PipelinedSource.clear_cache = %clear_cache
-kb.framework.PipelinedSource.cache_managers = @kb.cache.cache_managers()
-kb.framework.PipelinedSource.shuffle_buffer = %shuffle_buffer
-kb.cache.BaseCacheManager.preprocess = True
-kb.cache.cache_managers.root_dir = @cache/kb.path.model_dir()
-kb.cache.cache_managers.train_impl = %cache_manager_impl
-kb.cache.cache_managers.validation_impl = %cache_manager_impl
-cache_manager_impl = @kb.cache.TFRecordsCacheManager
-kb.cache.TFRecordsCacheManager.compression = 'GZIP'
-cache/kb.path.model_dir.run = None
-cache/kb.path.model_dir.variant_id = 'cache'
-
-model_id = 'default_model'
-variant_id = 'default_variant'
-run = 0
-
-compiler = @kb.framework.compile_classification_model
-kb.framework.compile_classification_model.optimizer = %optimizer
+kb.experiments.logging_callbacks.backup = True
 optimizer = @tf.keras.optimizers.Adam()
 
-clear_cache = False
-bucket_sizes = False
+batcher = @kb.data.dense_to_ragged_batch()
+kb.data.dense_to_ragged_batch.batch_size = %batch_size
+
+run = 0
+global_seed = %run
+global_generator_seed = 0  # allows reuse of cache files
+data_seed = 0
+
+root_dir = @kb.path.expand()
+root_dir/kb.path.expand.path = "~/ecn"
 
 # to define:
-# build_fn =
-# base_source =
-# batch_size =
-# problem_id =
+# meta_model_func: meta-model building function
+# train_data: base dataset before augmentation
+# validation_data: base dataset before augmentation
+# train_augment_func
+# validation_augment_func
+# batch_size: int
+# problem_id: str

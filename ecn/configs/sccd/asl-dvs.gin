@@ -1,6 +1,14 @@
-include 'base.gin'
-include '../builders/vox-pool.gin'
-include '../sources/asl-dvs.gin'
+include '$ECN_CONFIG/sccd/base.gin'
+include '$ECN_CONFIG/builders/vox-pool.gin'
+include '$ECN_CONFIG/data/asl-dvs.gin'
+include '$ECN_CONFIG/data/aug/offline.gin'
+
+cache_repeats = 1
+
+batch_size = 8
+epochs = 100
+shuffle_buffer = 256
+validation_freq = 2
 
 inception_vox_pooling.reset_potential = -3.0
 inception_vox_pooling.threshold = 1.0

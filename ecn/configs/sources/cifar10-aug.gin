@@ -1,9 +1,0 @@
-import ecn.sources
-
-include 'cifar10.gin'
-include '../misc/aug.gin'
-
-Augmented2DSource.base = @cifar10_dvs_source()
-Augmented2DSource.flip_ud = 0.5  # this is really flip_lr
-
-problem_id = 'cifar10-aug'

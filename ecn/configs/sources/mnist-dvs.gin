@@ -1,9 +1,0 @@
-import ecn.sources
-
-base_source = @mnist_dvs_source()
-batch_size = 32
-epochs = 100
-BaseCacheManager.preprocess = True
-shuffle_buffer = 512
-
-problem_id = 'mnist-dvs'

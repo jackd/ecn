@@ -165,7 +165,7 @@ def featureless_temporal_event_conv(
     decay.shape.assert_has_rank(1)
     assert kernel.shape[0] == decay.shape[0]
 
-    assert isinstance(dt, tf.SparseTensor)
+    assert isinstance(dt.type_spec, tf.SparseTensorSpec)
     dt.shape.assert_has_rank(2)
     values = tf.exp(
         -tf.expand_dims(decay, axis=0) * tf.expand_dims(dt.values, axis=-1)

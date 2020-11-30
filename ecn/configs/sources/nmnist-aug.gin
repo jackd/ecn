@@ -1,8 +1,0 @@
-import ecn.sources
-
-include 'nmnist.gin'
-include '../misc/aug.gin'
-
-Augmented2DSource.base = @nmnist_source()
-
-problem_id = 'nmnist-aug'

@@ -863,7 +863,7 @@ class Convolver(Generic[S0, S1]):
 
         # dt = mg.batch(dt)
         # with mg.post_batch_context():
-        #     b, i, j = tf.unstack(dt.indices, axis=-1)
+        #     b, i, j = tf.unstack(dt.indices, num=3, axis=-1)
         #     i = i + tf.gather(out_stream.row_starts, b)
         #     j = j + tf.gather(in_stream.row_starts, b)
         #     values = tf.cast(
@@ -922,7 +922,7 @@ class Convolver(Generic[S0, S1]):
 
         #     # components = []
         #     for ij in ijs:
-        #         i, j = tf.unstack(ij, axis=-1)
+        #         i, j = tf.unstack(ij, num=2, axis=-1)
         #         indices = tf.RaggedTensor.from_value_rowids(
         #             j, i, nrows=self.out_stream.size, validate=False)
         #         dts.append(
@@ -949,7 +949,9 @@ class Convolver(Generic[S0, S1]):
         )
 
         for ij in ijs:
-            i, j = tf.unstack(ij, axis=-1)
+            ij.shape.assert_has_rank(2)
+            assert ij.shape[1] == 2
+            i, j = tf.unstack(ij, num=2, axis=-1)
             indices = ragged.from_value_rowids(
                 j, i, nrows=maybe_cast(self.out_stream.size, i.dtype), validate=False,
             )

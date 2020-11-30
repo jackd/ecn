@@ -71,6 +71,8 @@ def get_kwargs():
 
     v2_kwargs = dict(features=features, dt=dt, kernel=kernel, decay=decay)
 
+    dt.indices.assert_has_rank(2)
+    assert dt.indices.shape[1] == 3
     i, s, j = tf.unstack(dt.indices, axis=-1)
     s = tf.cast(s, tf.int32)
     ij = tf.stack((i, j), axis=-1)
