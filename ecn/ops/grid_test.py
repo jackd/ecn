@@ -68,35 +68,60 @@ class GridOpsTest(tf.test.TestCase):
 
     def test_grid_coords(self):
         coords, shape = self.evaluate(
-            grid.grid_coords(in_shape=[5], kernel_shape=[3], strides=[1], padding=[0],)
+            grid.grid_coords(
+                in_shape=[5],
+                kernel_shape=[3],
+                strides=[1],
+                padding=[0],
+            )
         )
         np.testing.assert_equal(shape, (3,))
         np.testing.assert_equal(coords, np.expand_dims([0, 1, 2], axis=-1))
 
     def test_strided_grid_coords(self):
         coords, shape = self.evaluate(
-            grid.grid_coords(in_shape=[5], kernel_shape=[3], strides=[2], padding=[0],)
+            grid.grid_coords(
+                in_shape=[5],
+                kernel_shape=[3],
+                strides=[2],
+                padding=[0],
+            )
         )
         np.testing.assert_equal(shape, (2,))
         np.testing.assert_equal(coords, np.expand_dims([0, 2], axis=-1))
 
     def test_padded_grid_coords(self):
         coords, shape = self.evaluate(
-            grid.grid_coords(in_shape=[5], kernel_shape=[3], strides=[1], padding=[1],)
+            grid.grid_coords(
+                in_shape=[5],
+                kernel_shape=[3],
+                strides=[1],
+                padding=[1],
+            )
         )
         np.testing.assert_equal(shape, (5,))
         np.testing.assert_equal(coords, np.expand_dims([-1, 0, 1, 2, 3], axis=-1))
 
     def test_padded_strided_grid_coords(self):
         coords, shape = self.evaluate(
-            grid.grid_coords(in_shape=[5], kernel_shape=[3], strides=[2], padding=[1],)
+            grid.grid_coords(
+                in_shape=[5],
+                kernel_shape=[3],
+                strides=[2],
+                padding=[1],
+            )
         )
         np.testing.assert_equal(shape, (3,))
         np.testing.assert_equal(coords, np.expand_dims([-1, 1, 3], axis=-1))
 
     def test_even_grid_coords(self):
         coords, shape = self.evaluate(
-            grid.grid_coords(in_shape=[4], kernel_shape=[3], strides=[2], padding=[1],)
+            grid.grid_coords(
+                in_shape=[4],
+                kernel_shape=[3],
+                strides=[2],
+                padding=[1],
+            )
         )
         np.testing.assert_equal(shape, (2,))
         np.testing.assert_equal(coords, np.expand_dims([-1, 1], axis=-1))

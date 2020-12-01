@@ -1,13 +1,13 @@
 import functools
 import itertools
 
+import meta_model.pipeline as pl
 import numpy as np
 import tensorflow as tf
 from absl.testing import parameterized
+from meta_model.batchers import RaggedBatcher
 
 import ecn.components as comp
-import meta_model.pipeline as pl
-from meta_model.batchers import RaggedBatcher
 
 Lambda = tf.keras.layers.Lambda
 
@@ -250,8 +250,16 @@ class ComponentsTest(tf.test.TestCase, parameterized.TestCase):
 
         dataset = tf.data.Dataset.from_generator(
             lambda: data,
-            {"times": tf.int64, "coords": tf.int64, "features": tf.float32,},
-            {"times": (None,), "coords": (None, 1), "features": (None, 3),},
+            {
+                "times": tf.int64,
+                "coords": tf.int64,
+                "features": tf.float32,
+            },
+            {
+                "times": (None,),
+                "coords": (None, 1),
+                "features": (None, 3),
+            },
         )
 
         self._test_batched_simple(dataset, build_fn)
@@ -303,8 +311,16 @@ class ComponentsTest(tf.test.TestCase, parameterized.TestCase):
 
         dataset = tf.data.Dataset.from_generator(
             lambda: data,
-            {"times": tf.int64, "coords": tf.int64, "features": tf.float32,},
-            {"times": (None,), "coords": (None, 1), "features": (None, 3),},
+            {
+                "times": tf.int64,
+                "coords": tf.int64,
+                "features": tf.float32,
+            },
+            {
+                "times": (None,),
+                "coords": (None, 1),
+                "features": (None, 3),
+            },
         )
 
         self._test_batched_simple(dataset, build_fn)
@@ -366,8 +382,16 @@ class ComponentsTest(tf.test.TestCase, parameterized.TestCase):
 
         dataset = tf.data.Dataset.from_generator(
             lambda: data,
-            {"times": tf.int64, "coords": tf.int64, "features": tf.float32,},
-            {"times": (None,), "coords": (None, 1), "features": (None, 3),},
+            {
+                "times": tf.int64,
+                "coords": tf.int64,
+                "features": tf.float32,
+            },
+            {
+                "times": (None,),
+                "coords": (None, 1),
+                "features": (None, 3),
+            },
         )
 
         self._test_batched_simple(dataset, build_fn)

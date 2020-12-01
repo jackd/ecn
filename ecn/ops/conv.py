@@ -1,8 +1,7 @@
 from typing import Sequence, Union
 
-import tensorflow as tf
-
 import kblocks.ops.sparse as sparse_ops
+import tensorflow as tf
 
 # @tf.RegisterGradient("SparseTensorToCSRSparseMatrix")
 # def _SparseTensorToCSRSparseMatrixGrad(op, grad):
@@ -88,8 +87,8 @@ def complex_split(x):
 @tf.custom_gradient
 def _csr_matmul(indices: tf.Tensor, values: tf.Tensor, dense_shape, b: tf.Tensor):
     try:
-        from tensorflow.python.ops.linalg.sparse import (  # pylint: disable=import-outside-toplevel
-            sparse as sparse_lib,
+        from tensorflow.python.ops.linalg.sparse import (
+            sparse as sparse_lib,  # pylint: disable=import-outside-toplevel
         )
     except ImportError as e:
         raise ImportError("use_csr requires tensorflow >= 2.3") from e

@@ -67,7 +67,12 @@ class ConvTest(tf.test.TestCase):
         dts = [random_dt(n_in, n_out, E) for _ in range(sk)]
 
         kernel = tf.random.normal((sk, tk, 1, f_out))
-        decay = tf.random.uniform((sk, tk,))
+        decay = tf.random.uniform(
+            (
+                sk,
+                tk,
+            )
+        )
 
         expected = conv.spatio_temporal_event_conv(
             tf.ones((n_in, 1), dtype=tf.float32), dts, kernel, decay
@@ -117,7 +122,12 @@ class ConvTest(tf.test.TestCase):
         dts = [random_dt(n_in, n_out, E) for _ in range(sk)]
 
         kernel = tf.random.normal((sk, tk, 2, f_out))
-        decay = tf.random.uniform((sk, tk,))
+        decay = tf.random.uniform(
+            (
+                sk,
+                tk,
+            )
+        )
 
         expected = conv.spatio_temporal_event_conv(
             tf.one_hot(tf.cast(bool_features, tf.uint8), 2, dtype=tf.float32),

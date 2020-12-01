@@ -2,7 +2,6 @@ import functools
 from typing import Tuple
 
 import tensorflow as tf
-
 from numba_stream import lif as _np_lif
 
 IntTensor = tf.Tensor

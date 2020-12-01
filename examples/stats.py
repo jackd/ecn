@@ -1,9 +1,8 @@
+import events_tfds.events.asl_dvs  # pylint: disable=unused-import
 import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
 from tqdm import tqdm
-
-import events_tfds.events.asl_dvs  # pylint: disable=unused-import
 
 
 def map_fn(events, labels):

@@ -1,5 +1,6 @@
-from ecn.ops import grid as _grid_ops
 from wtftf.meta import layered
+
+from ecn.ops import grid as _grid_ops
 
 ravel_multi_index = layered(_grid_ops.ravel_multi_index)
 unravel_index_transpose = layered(_grid_ops.unravel_index_transpose)

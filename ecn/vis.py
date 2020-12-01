@@ -1,16 +1,16 @@
 from typing import Callable, Optional, Sequence
 
+import events_tfds.vis.anim as anim
 import gin
 import matplotlib.pyplot as plt
+import meta_model.pipeline as pl
 import numpy as np
 import tensorflow as tf
 from absl import logging
-
-import ecn.components as comp
-import events_tfds.vis.anim as anim
-import meta_model.pipeline as pl
 from events_tfds.vis.image import as_frame, as_frames
 from meta_model.utils import ModelMap
+
+import ecn.components as comp
 
 
 def _get_cached_stream_dataset(

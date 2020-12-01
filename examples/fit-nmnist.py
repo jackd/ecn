@@ -3,18 +3,18 @@ import os
 
 import gin
 import numpy as np
+import shape_tfds.shape.modelnet  # pylint: disable=unused-import
 import tensorflow as tf
 import tensorflow_datasets as tfds
-
-import shape_tfds.shape.modelnet  # pylint: disable=unused-import
-from ecn.builders.vox_pool import inception_vox_pooling
-from ecn.ops.augment import augment_event_dataset
 from events_tfds.events import nmnist
 from kblocks.data import dense_to_ragged_batch
 from kblocks.extras.callbacks import PrintLogger, ReduceLROnPlateauModule
 from kblocks.models import compiled
 from kblocks.trainables import trainable_fit
 from kblocks.trainables.meta_models import build_meta_model_trainable
+
+from ecn.builders.vox_pool import inception_vox_pooling
+from ecn.ops.augment import augment_event_dataset
 
 BackupAndRestore = tf.keras.callbacks.experimental.BackupAndRestore
 AUTOTUNE = tf.data.experimental.AUTOTUNE

@@ -1,5 +1,6 @@
-from ecn.ops import ragged as _ragged_ops
 from wtftf.meta import layered
+
+from ecn.ops import ragged as _ragged_ops
 
 row_sorted = layered(_ragged_ops.row_sorted)
 transpose_csr = layered(_ragged_ops.transpose_csr)

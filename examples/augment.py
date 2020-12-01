@@ -1,10 +1,10 @@
 import functools
 
 import tensorflow_datasets as tfds
+from events_tfds.events import asl_dvs
 
 from ecn import vis
 from ecn.ops.augment import augment_event_dataset
-from events_tfds.events import asl_dvs
 
 reverse_xy = False
 

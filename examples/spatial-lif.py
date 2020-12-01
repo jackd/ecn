@@ -1,18 +1,18 @@
 """Attempts to visualize event connectedness."""
 import collections
 
+import events_tfds.vis.anim as anim
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+from events_tfds.events.nmnist import NMNIST
+from events_tfds.vis.image import as_frames
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 from scipy.sparse import coo_matrix
 
-import events_tfds.vis.anim as anim
 from ecn.ops import grid, lif
 from ecn.ops import neighbors as neigh
 from ecn.ops import ragged
-from events_tfds.events.nmnist import NMNIST
-from events_tfds.vis.image import as_frames
 
 
 def vis_adjacency(indices, splits, in_times, out_times, decay_time):
@@ -67,15 +67,21 @@ def vis_graph(coords, time, out_coords, out_time, indices, splits, n=10):
 
 
 ds_kwargs = dict(
-    strides=np.array((2, 2)), kernel_shape=np.array((5, 5)), padding=np.array((2, 2)),
+    strides=np.array((2, 2)),
+    kernel_shape=np.array((5, 5)),
+    padding=np.array((2, 2)),
 )
 ip_kwargs = dict(
-    strides=np.array((1, 1)), kernel_shape=np.array((3, 3)), padding=np.array((1, 1)),
+    strides=np.array((1, 1)),
+    kernel_shape=np.array((3, 3)),
+    padding=np.array((1, 1)),
 )
 
 GRID_SHAPE = (34, 34)
 NUM_LEVELS = 3
-lif_kwargs = dict(reset_potential=-1.0,)
+lif_kwargs = dict(
+    reset_potential=-1.0,
+)
 DECAY_TIME = 12500
 NUM_FRAMES = 20
 FPS = 4

@@ -1,23 +1,23 @@
 import functools
 from typing import Generic, Optional, Tuple, TypeVar, Union
 
-import numpy as np
-import tensorflow as tf
-
-import ecn.pub_sub as ps
 import kblocks.extras.layers.sparse as sparse_layers
 import meta_model.pipeline as pl
-from ecn.layers import conv as conv_layers
-from ecn.layers import grid as grid_layers
-from ecn.layers import lif as lif_layers
-from ecn.layers import neighbors as neigh_layers
-from ecn.layers import ragged as ragged_layers
+import numpy as np
+import tensorflow as tf
 from kblocks.keras import layers
 from wtftf.meta import memoized_property
 from wtftf.ragged import RaggedStructure, is_ragged
 from wtftf.ragged import layers as ragged_wrappers
 from wtftf.ragged import ragged_rank
 from wtftf.sparse import layers as sparse_wrappers
+
+import ecn.pub_sub as ps
+from ecn.layers import conv as conv_layers
+from ecn.layers import grid as grid_layers
+from ecn.layers import lif as lif_layers
+from ecn.layers import neighbors as neigh_layers
+from ecn.layers import ragged as ragged_layers
 
 BoolTensor = tf.Tensor
 IntTensor = tf.Tensor
@@ -235,7 +235,9 @@ class Stream:
     on_create: ps.Topic = _publisher.topic
 
     def __init__(
-        self, times: IntTensor, dtype=DTYPE,
+        self,
+        times: IntTensor,
+        dtype=DTYPE,
     ):
         self._dtype = dtype
         self._times = tf.cast(times, dtype)
@@ -579,7 +581,9 @@ class Convolver(Generic[S0, S1]):
         splits = pl.cache(splits)
 
         ragged_indices = ragged_wrappers.from_row_splits(
-            maybe_cast(indices, tf.int64), maybe_cast(splits, tf.int64), validate=False,
+            maybe_cast(indices, tf.int64),
+            maybe_cast(splits, tf.int64),
+            validate=False,
         )
 
         ragged_indices = pl.batch(ragged_indices)
@@ -632,7 +636,10 @@ class Convolver(Generic[S0, S1]):
             # num required in tf-nightly (2.5)
             i, j = tf.unstack(ij, num=2, axis=-1)
             indices = ragged_wrappers.from_value_rowids(
-                j, i, nrows=maybe_cast(self.out_stream.size, i.dtype), validate=False,
+                j,
+                i,
+                nrows=maybe_cast(self.out_stream.size, i.dtype),
+                validate=False,
             )
 
             components.append(ragged_components(indices))

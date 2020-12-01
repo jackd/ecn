@@ -3,9 +3,9 @@ from typing import Callable, Iterable, Optional, Union
 
 import gin
 import tensorflow as tf
+from wtftf.sparse import is_sparse
 
 from ecn.ops import conv as conv_ops
-from wtftf.sparse import is_sparse
 
 FloatTensor = tf.Tensor
 IntTensor = tf.Tensor
@@ -331,7 +331,9 @@ class FeaturelessSpatioTemporalEventConv(SpatioTemporalEventConv):
         if len(dt) == 1:
             (dt,) = dt
         features = conv_ops.featureless_spatio_temporal_event_conv(
-            dt=dt, kernel=self.kernel, decay=self.decay,
+            dt=dt,
+            kernel=self.kernel,
+            decay=self.decay,
         )
         return self._finalize(features)
 
@@ -352,7 +354,10 @@ class BinarySpatioTemporalEventConv(SpatioTemporalEventConv):
         if len(dt) == 1:
             (dt,) = dt
         features = conv_ops.binary_spatio_temporal_event_conv(
-            features=features, dt=dt, kernel=self.kernel, decay=self.decay,
+            features=features,
+            dt=dt,
+            kernel=self.kernel,
+            decay=self.decay,
         )
         return self._finalize(features)
 
@@ -368,7 +373,9 @@ class FeaturelessTemporalEventConv(EventConvBase):
     def call(self, inputs):
         dt = inputs
         features = conv_ops.featureless_temporal_event_conv(
-            dt=dt, kernel=self.kernel, decay=self.decay,
+            dt=dt,
+            kernel=self.kernel,
+            decay=self.decay,
         )
         return self._finalize(features)
 
@@ -384,7 +391,10 @@ class BinaryTemporalEventConv(EventConvBase):
     def call(self, inputs):
         features, dt = inputs
         features = conv_ops.binary_temporal_event_conv(
-            features=features, dt=dt, kernel=self.kernel, decay=self.decay,
+            features=features,
+            dt=dt,
+            kernel=self.kernel,
+            decay=self.decay,
         )
         return self._finalize(features)
 

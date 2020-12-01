@@ -1,7 +1,6 @@
 from typing import Tuple
 
 import tensorflow as tf
-
 from kblocks.ops.ragged import lengths_to_splits, mask_to_lengths
 
 BoolTensor = tf.Tensor

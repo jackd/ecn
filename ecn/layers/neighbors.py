@@ -1,5 +1,6 @@
-from ecn.ops import neighbors as _neigh_ops
 from wtftf.meta import layered
+
+from ecn.ops import neighbors as _neigh_ops
 
 compute_pooled_neighbors = layered(_neigh_ops.compute_pooled_neighbors)
 compute_full_neighbors = layered(_neigh_ops.compute_full_neighbors)

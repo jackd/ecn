@@ -1,12 +1,12 @@
 from typing import Callable, Sequence, Tuple, Union
 
 import gin
+import meta_model.pipeline as pl
 import numpy as np
 import tensorflow as tf
-
-import meta_model.pipeline as pl
-from ecn import components as comp
 from kblocks.keras import layers
+
+from ecn import components as comp
 
 Lambda = tf.keras.layers.Lambda
 
@@ -127,7 +127,10 @@ def inception_vox_pooling(
     t_end = pl.batch(t_end)
 
     out_stream = comp.spatial_leaky_integrate_and_fire(
-        in_stream, link, decay_time=decay_time, **lif_kwargs,
+        in_stream,
+        link,
+        decay_time=decay_time,
+        **lif_kwargs,
     )
 
     features = pl.model_input(pl.batch(pl.cache(polarity)))
@@ -222,7 +225,10 @@ def inception_vox_pooling(
 
         link = in_stream.grid.link((3, 3), (2, 2), (1, 1))
         out_stream = comp.spatial_leaky_integrate_and_fire(
-            in_stream, link, decay_time=decay_time, **lif_kwargs,
+            in_stream,
+            link,
+            decay_time=decay_time,
+            **lif_kwargs,
         )
 
         ds_convolver = comp.spatio_temporal_convolver(

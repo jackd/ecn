@@ -1,10 +1,10 @@
 """Script investigating performance cost of tf wrapping."""
+import numba_stream.lif as np_lif
 import tensorflow as tf
+from events_tfds.events.nmnist import NMNIST
 
 import ecn.ops.lif as tf_lif
-import numba_stream.lif as np_lif
 from ecn.benchmark_utils import BenchmarkManager
-from events_tfds.events.nmnist import NMNIST
 
 
 def get_data():

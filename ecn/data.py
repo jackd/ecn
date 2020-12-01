@@ -1,6 +1,5 @@
 import gin
 import numpy as np
-
 from events_tfds.events import asl_dvs, cifar10_dvs, mnist_dvs, ncaltech101, nmnist
 
 gin.constant("ASL_DVS_GRID_SHAPE", asl_dvs.GRID_SHAPE)

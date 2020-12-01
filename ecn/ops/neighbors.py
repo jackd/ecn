@@ -2,7 +2,6 @@ import functools
 from typing import Optional, Tuple
 
 import tensorflow as tf
-
 from numba_stream import neighbors as _np_neigh
 
 IntTensor = tf.Tensor
