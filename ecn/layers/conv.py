@@ -4,8 +4,8 @@ from typing import Callable, Iterable, Optional, Union
 import gin
 import tensorflow as tf
 
-from composite_layers.types import is_sparse
 from ecn.ops import conv as conv_ops
+from wtftf.sparse import is_sparse
 
 FloatTensor = tf.Tensor
 IntTensor = tf.Tensor
@@ -132,7 +132,7 @@ class EventConvBase(layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
     @abc.abstractmethod
-    def call(self, inputs):
+    def call(self, inputs):  # pylint:disable=arguments-differ
         raise NotImplementedError
 
     @abc.abstractmethod

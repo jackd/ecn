@@ -29,7 +29,6 @@ def inception_vox_pooling(
     decay_time_expansion_rate: float = 2.0,
     num_levels: int = 5,
     activation: Union[str, Callable] = "relu",
-    bucket_sizes: bool = False,
     recenter: bool = True,
     vox_reduction: str = "mean",
     vox_start: int = 2,
@@ -67,17 +66,15 @@ def inception_vox_pooling(
     grid = comp.Grid(grid_shape)
     link = grid.link((3, 3), (2, 2), (1, 1))
 
-    in_stream: comp.SpatialStream = comp.SpatialStream(
-        grid, times, coords, bucket_sizes=bucket_sizes
-    )
+    in_stream: comp.SpatialStream = comp.SpatialStream(grid, times, coords)
     t_end = in_stream.cached_times[-1] + 1
     t_end = pl.batch(t_end)
 
     out_stream = comp.spatial_leaky_integrate_and_fire(
-        in_stream, link, decay_time=decay_time, bucket_sizes=bucket_sizes, **lif_kwargs,
+        in_stream, link, decay_time=decay_time, **lif_kwargs,
     )
 
-    features = in_stream.prepare_model_inputs(polarity)
+    features = pl.model_input(pl.batch(pl.cache(polarity)))
 
     batch_size, features = tf.keras.layers.Lambda(
         lambda x: (x.nrows(), tf.identity(x.values))
@@ -169,11 +166,7 @@ def inception_vox_pooling(
 
         link = in_stream.grid.link((3, 3), (2, 2), (1, 1))
         out_stream = comp.spatial_leaky_integrate_and_fire(
-            in_stream,
-            link,
-            decay_time=decay_time,
-            bucket_sizes=bucket_sizes,
-            **lif_kwargs,
+            in_stream, link, decay_time=decay_time, **lif_kwargs,
         )
 
         ds_convolver = comp.spatio_temporal_convolver(

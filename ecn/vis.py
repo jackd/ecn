@@ -95,7 +95,8 @@ def vis_streams2d(
 
     Args:
         meta_model_func: meta-model building function
-        base_source: base data source
+        dataset: base dataset to visualize.
+        augment_func: optional map function to apply to dataset.
         num_frames: number of frames in the final animation.
         fps: frame-rate
         group_size: if greater than 1, mean / std stats are printed for the size of each
@@ -109,7 +110,6 @@ def vis_streams2d(
     dataset, static_shapes = _get_cached_stream_dataset(
         meta_model_func, dataset, num_dims=2
     )
-    print(static_shapes)
 
     sizes = np.zeros((group_size, len(static_shapes)), dtype=np.int64)
     for i, example in enumerate(dataset):
@@ -149,31 +149,39 @@ def vis_streams2d(
         )
 
 
-# @gin.configurable(module="ecn.vis")
-# def vis_streams1d(meta_model_func: Callable, dataset: tf.data.Dataset):
-#     """Visualize 1D event streams."""
-#     dataset, static_shapes = vis_streams1d(meta_model_func, base_source, num_dims=1)
-#     print("num_channels: {}".format([shape[0] for shape in static_shapes]))
-#     for example in dataset:
-#         example = tf.nest.map_structure(lambda x: x.numpy(), example)
-#         if len(example) == 3:
-#             times, coords, polarity = example
-#         else:
-#             times, coords = example
-#             polarity = None
-#         del polarity
+@gin.configurable(module="ecn.vis")
+def vis_streams1d(
+    meta_model_func: Callable,
+    dataset: tf.data.Dataset,
+    augment_func: Optional[Callable] = None,
+):
+    """Visualize 1D event streams."""
+    if augment_func is not None:
+        dataset = dataset.map(augment_func)
+    dataset, static_shapes = _get_cached_stream_dataset(
+        meta_model_func, dataset, num_dims=1
+    )
+    print("num_channels: {}".format([shape[0] for shape in static_shapes]))
+    for example in dataset:
+        example = tf.nest.map_structure(lambda x: x.numpy(), example)
+        if len(example) == 3:
+            times, coords, polarity = example
+        else:
+            times, coords = example
+            polarity = None
+        del polarity
 
-#         print("Sizes: {}".format([t.shape[0] for t in times]))
-#         xys = []
-#         for (t, c, shape) in zip(times, coords, static_shapes):
-#             (size,) = shape
-#             c = np.squeeze(c, axis=-1)
-#             assert np.max(c) < size
-#             xys.append(((c + 0.5) / size, t))
-#         plt.figure()
-#         for i, xy in enumerate(xys):
-#             plt.scatter(*xy, s=(i + 1))
-#         plt.show()
+        print("Sizes: {}".format([t.shape[0] for t in times]))
+        xys = []
+        for (t, c, shape) in zip(times, coords, static_shapes):
+            (size,) = shape
+            c = np.squeeze(c, axis=-1)
+            assert np.max(c) < size
+            xys.append(((c + 0.5) / size, t))
+        plt.figure()
+        for i, xy in enumerate(xys):
+            plt.scatter(*xy, s=(i + 1))
+        plt.show()
 
 
 @gin.configurable(module="ecn.vis")
@@ -189,10 +197,11 @@ def vis_adjacency(
     where values are given by `exp(-dt / decay_time)`.
 
     Args:
-        meta_model_func: meta-model build function, mapping base_source inputs to
+        meta_model_func: meta-model build function, mapping dataset inputs to
             outputs. The actual outputs are ignored. Streams are recorded as they are
             created and the relevant adjacency matrices extracted.
         dataset: tf.data.Dataset used ot create meta-models.
+        augment_func: optional map function to apply to dataset.
     """
     if augment_func is not None:
         dataset = dataset.map(augment_func)
@@ -248,7 +257,7 @@ def vis_example2d(
     Visualize 2d example as an animated sequence of frames.
 
     Args:
-        example: element from unbatched image stream source, tuple of (features, label),
+        example: element from unbatched image stream, tuple of (features, label),
             where features is a dict with "coords", "time" and "polarity" keys.
         num_frames: total number of frames in resulting animation.
         fps: frame-rate

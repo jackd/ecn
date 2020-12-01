@@ -3,11 +3,8 @@ import ecn.builders
 
 meta_model_func = @ecn.builders.inception_vox_pooling
 
-inception_vox_pooling.bucket_sizes = %bucket_sizes
 inception_vox_pooling.kt0 = %kt0
 inception_vox_pooling.grid_shape = %grid_shape
 
-
-bucket_sizes = False
 model_id = 'vox-pool'
 kt0 = 4

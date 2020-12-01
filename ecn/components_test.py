@@ -12,7 +12,7 @@ from meta_model.batchers import RaggedBatcher
 Lambda = tf.keras.layers.Lambda
 
 
-def feature_inputs(features, stream, features_type="none"):
+def feature_inputs(features, features_type="none"):
     if features_type == "none":
         return None
     if features_type == "binary":
@@ -25,7 +25,7 @@ def feature_inputs(features, stream, features_type="none"):
             '`features_type` must be "none", "binary" or "float",'
             f" got {features_type}"
         )
-    out = stream.prepare_model_inputs(features)
+    out = pl.model_input(pl.batch(pl.cache(features)))
     out = Lambda(lambda x: tf.identity(x.values))(out)
     return out
 
@@ -107,7 +107,7 @@ class ComponentsTest(tf.test.TestCase, parameterized.TestCase):
             features = kwargs["features"]
             stream = comp.Stream(times, dtype=dtype)
             conv = comp.temporal_convolver(stream, stream, decay_time=1, max_decays=4)
-            out = conv.convolve(feature_inputs(features, stream, feature_type), 2, 2)
+            out = conv.convolve(feature_inputs(features, feature_type), 2, 2)
             return out, (), ()
 
         data = [
@@ -143,7 +143,7 @@ class ComponentsTest(tf.test.TestCase, parameterized.TestCase):
                 link, stream, stream, spatial_buffer_size=5, decay_time=2, max_decays=4
             )
 
-            features = feature_inputs(features, stream, feature_type)
+            features = feature_inputs(features, feature_type)
             out = conv.convolve(features, 2, 2)
             return out, (), ()
 
@@ -183,7 +183,7 @@ class ComponentsTest(tf.test.TestCase, parameterized.TestCase):
                 stream, out_stream, decay_time=2, max_decays=4
             )
 
-            out = conv.convolve(feature_inputs(features, stream, feature_type), 2, 2)
+            out = conv.convolve(feature_inputs(features, feature_type), 2, 2)
             return out, (), ()
 
         data = [
@@ -225,7 +225,7 @@ class ComponentsTest(tf.test.TestCase, parameterized.TestCase):
                 max_decays=4,
             )
 
-            features = feature_inputs(features, stream, feature_type)
+            features = feature_inputs(features, feature_type)
             # out = features
             out = conv.convolve(features, 2, 2)
 
@@ -270,7 +270,7 @@ class ComponentsTest(tf.test.TestCase, parameterized.TestCase):
             link = grid.link((2,), (2,), (0,))
             stream = comp.SpatialStream(grid, times, coords, dtype=dtype)
             out_stream = comp.spatial_leaky_integrate_and_fire(stream, link, 2)
-            features = feature_inputs(features, stream, feature_type)
+            features = feature_inputs(features, feature_type)
 
             conv = comp.spatio_temporal_convolver(
                 link,
@@ -322,7 +322,7 @@ class ComponentsTest(tf.test.TestCase, parameterized.TestCase):
             link = grid.link((3,), (2,), (1,))
             stream = comp.SpatialStream(grid, times, coords, dtype=dtype)
             out_stream = comp.spatial_leaky_integrate_and_fire(stream, link, t0)
-            features = feature_inputs(features, stream, feature_type)
+            features = feature_inputs(features, feature_type)
 
             conv = comp.spatio_temporal_convolver(
                 link,
@@ -336,7 +336,6 @@ class ComponentsTest(tf.test.TestCase, parameterized.TestCase):
             features = conv.convolve(features, 2, 2, activation="relu")
 
             stream = out_stream
-            # link = stream.grid.link((3,), (2,), (0))
             link = stream.grid.self_link((3,))
             out_stream = comp.spatial_leaky_integrate_and_fire(stream, link, 2 * t0)
             conv = comp.spatio_temporal_convolver(
@@ -387,7 +386,7 @@ class ComponentsTest(tf.test.TestCase, parameterized.TestCase):
                 stream, out_stream, decay_time=2, max_decays=4
             )
 
-            features = feature_inputs(features, stream, feature_type)
+            features = feature_inputs(features, feature_type)
             # out = features
             out = conv.convolve(features, 2, 2)
             out = tf.keras.layers.BatchNormalization()(out)
@@ -419,11 +418,9 @@ class ComponentsTest(tf.test.TestCase, parameterized.TestCase):
 
         self._test_batched_simple(dataset, build_fn)
 
-    @parameterized.parameters((2, 2), (3, 4), (7, 8), (8, 8), (9, 16))
-    def test_to_nearest_power(self, power, expected):
-        self.assertEqual(self.evaluate(comp.to_nearest_power(power)), expected)
-
 
 if __name__ == "__main__":
     tf.test.main()
-    # ComponentsTest().test_batched_1d_conv(tf.int32, "float")
+    # ComponentsTest().test_batched_1d_conv0()
+    # ComponentsTest().test_batched_1d_lif_conv_chained0()
+    # ComponentsTest().test_batched_1d_conv0()

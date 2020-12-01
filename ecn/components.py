@@ -7,13 +7,17 @@ import tensorflow as tf
 import ecn.pub_sub as ps
 import kblocks.extras.layers.sparse as sparse_layers
 import meta_model.pipeline as pl
-from composite_layers import ragged, sparse
 from ecn.layers import conv as conv_layers
 from ecn.layers import grid as grid_layers
 from ecn.layers import lif as lif_layers
 from ecn.layers import neighbors as neigh_layers
 from ecn.layers import ragged as ragged_layers
 from kblocks.keras import layers
+from wtftf.meta import memoized_property
+from wtftf.ragged import RaggedStructure, is_ragged
+from wtftf.ragged import layers as ragged_wrappers
+from wtftf.ragged import ragged_rank
+from wtftf.sparse import layers as sparse_wrappers
 
 BoolTensor = tf.Tensor
 IntTensor = tf.Tensor
@@ -41,28 +45,15 @@ def _normalize_coords(coords, shape):
     return tf.cast(coords, tf.float32) / scale
 
 
-def _final_features(args):
-    features, row_lengths, row_ends = args
-    final = tf.gather(features, row_ends)
-    return tf.where(tf.equal(row_lengths, 0), tf.zeros_like(final), final)
-
-
-def to_nearest_power(x, base=2):
-    x = tf.convert_to_tensor(x, dtype_hint=tf.int64)
-    base = tf.convert_to_tensor(base, dtype_hint=x.dtype)
-    assert x.dtype.is_integer
-    return base ** tf.cast(
-        tf.math.ceil(
-            tf.math.log(tf.cast(x, tf.float32)) / tf.math.log(tf.cast(base, tf.float32))
-        ),
-        x.dtype,
-    )
-
-
 def maybe_cast(tensor, dtype):
     if tensor.dtype != dtype:
         return tf.cast(tensor, dtype)
     return tensor
+
+
+def ragged_components(rt):
+    assert ragged_rank(rt) == 1
+    return ragged_wrappers.values(rt), ragged_wrappers.row_splits(rt)
 
 
 @functools.wraps(tf.stack)
@@ -72,29 +63,6 @@ def tf_stack(values, axis=0, name=None):
         name = values[0].graph.unique_name("stack")
         return tf.stack(values, axis=axis, name=name)
     return tf.stack(values, axis=axis, name=name)
-
-
-def pad_ragged(rt, padding, values=0):
-    assert ragged.ragged_rank(rt) == 1
-    flat_values = ragged.flat_values(rt)
-    row_splits = ragged.row_splits(rt)
-    padding_tensor = [[0, 0]] * (len(flat_values.shape))
-    padding_tensor[0][1] = padding
-    padding_tensor = tf.convert_to_tensor(padding_tensor)
-    flat_values = tf.pad(flat_values, padding_tensor, constant_values=values)
-    starts, total = tf.split(row_splits, [-1, 1])
-    row_splits = tf.concat((starts, total + padding), axis=0)
-
-    # def fn(args):
-    #     flat_values, row_splits = args
-    #     return tf.RaggedTensor.from_row_splits(
-    #         flat_values, tf.cast(row_splits, tf.int64), validate=True
-    #     )
-
-    # return tf.keras.layers.Lambda(fn)([flat_values, row_splits])
-    return ragged.from_row_splits(
-        flat_values, tf.cast(row_splits, tf.int64), validate=False
-    )
 
 
 class Grid:
@@ -108,12 +76,11 @@ class Grid:
             self._shape = maybe_cast(shape, dtype=dtype)
         else:
             self._shape = tf.convert_to_tensor(shape, dtype=dtype)
-        self._size = tf.math.reduce_prod(self._shape)
         self._shape.shape.assert_has_rank(1)
 
-    @property
+    @memoized_property
     def size(self):
-        return self._size
+        return tf.math.reduce_prod(self._shape)
 
     @property
     def dtype(self):
@@ -148,40 +115,38 @@ class Grid:
             )
 
         out_grid = Grid(out_shape)
-        return GridNeighbors(
+        transposed = GridNeighbors(
             out_grid,
             self,
             indices,
             splits,
             partitions,
             np.prod(kernel_shape, dtype=self.dtype.as_numpy_dtype),
-        ).T
+        )
+        return transposed.T
+
+    def _self_link(
+        self, partitions, indices, splits, num_partitions: int
+    ) -> "GridNeighbors":
+        link = GridNeighbors(self, self, indices, splits, partitions, num_partitions)
+        link._transpose = link  # pylint: disable=protected-access
+        return link
 
     def self_link(self, kernel_shape: Tuple[int, ...]) -> "GridNeighbors":
         partitions, indices, splits = grid_layers.sparse_neighborhood_in_place(
             self.shape, kernel_shape
         )
-        link = GridNeighbors(
-            self,
-            self,
-            indices,
-            splits,
-            partitions,
-            np.prod(kernel_shape, dtype=self.dtype.as_numpy_dtype),
-        )
-        link._transpose = link  # pylint: disable=protected-access
-        return link
+        num_partitions = np.prod(kernel_shape, dtype=self.dtype.as_numpy_dtype)
+        return self._self_link(partitions, indices, splits, num_partitions)
 
     def partial_self_link(self, kernel_mask: BoolArray) -> "GridNeighbors":
-        num_partitions = np.count_nonzero(kernel_mask)
         (
             partitions,
             indices,
             splits,
         ) = grid_layers.sparse_neighborhood_from_mask_in_place(self.shape, kernel_mask)
-        link = GridNeighbors(self, self, indices, splits, partitions, num_partitions)
-        link._transpose = link  # pylint: disable=protected-access
-        return link
+        num_partitions = np.count_nonzero(kernel_mask)
+        return self._self_link(partitions, indices, splits, num_partitions)
 
     def ravel_indices(self, indices: IntTensor, axis=-1):
         indices.shape.assert_has_rank(2)
@@ -270,30 +235,11 @@ class Stream:
     on_create: ps.Topic = _publisher.topic
 
     def __init__(
-        self,
-        times: IntTensor,
-        min_mean_size: Optional[int] = None,
-        bucket_sizes: bool = False,
-        dtype=DTYPE,
+        self, times: IntTensor, dtype=DTYPE,
     ):
         self._dtype = dtype
-
         self._times = tf.cast(times, dtype)
-
-        self._min_mean_size = min_mean_size
-        self._batched = False
-        self._size = None
-        self._model_row_starts = None
-        self._model_row_ends = None
-        self._model_row_splits = None
-        self._model_value_rowids = None
-        self._model_row_lengths = None
-        self._model_times = None
-        self._model_batch_size = None
-        self._model_valid_size = None
-
-        self._bucket_sizes = bucket_sizes
-
+        self._batched_structure = None
         Stream._publisher.add(self)
 
     @property
@@ -301,72 +247,66 @@ class Stream:
         return self._dtype
 
     @property
-    def batched(self) -> bool:
-        return self._batched
-
-    @property
-    def min_mean_size(self) -> Optional[int]:
-        return self._min_mean_size
-
-    @property
     def times(self) -> IntTensor:
         return self._times
 
-    @property
+    @memoized_property
     def size(self):
-        if self._size is None:
-            self._size = tf.squeeze(tf.shape(self._times, out_type=self.dtype), axis=0)
-        return self._size
+        return tf.squeeze(tf.shape(self._times, out_type=self.dtype), axis=0)
 
-    @property
+    @memoized_property
     def cached_times(self):
-        self._batch()
-        return self._cached_times
+        return pl.cache(self._times)
 
     def _batch(self):
-        if self._batched:
-            return
+        if self._batched_structure is None:
+            times = pl.batch(self.cached_times)
+            self._batched_structure = RaggedStructure.from_tensor(times)
+            self._batched_times = ragged_wrappers.flat_values(times)
 
-        times = pl.cache(self._times)
-        self._cached_times = times
+    @property
+    def batched_times(self):
+        self._batch()
+        return self._batched_times
 
-        times = pl.batch(times)
-        self._row_splits = ragged.row_splits(times)
-        self._valid_size = self._row_splits[-1]
-        if self._bucket_sizes:
-            self._batched_size = to_nearest_power(self._valid_size, 2)
-            self._padding = self._batched_size - self._valid_size
-            times = pad_ragged(times, self._padding, values=times.dtype.limits[1])
-            self._row_splits = ragged.row_splits(times)
-        else:
-            self._batched_size = self._valid_size
-            self._padding = None
+    @property
+    def batched_structure(self) -> RaggedStructure:
+        self._batch()
+        return self._batched_structure
 
-        self._batched_times = ragged.flat_values(times)
-        self._value_rowids = ragged.value_rowids(times)
-        self._row_starts, total = tf.split(self._row_splits, [-1, 1], axis=0)
-        self._valid_size = tf.squeeze(total, axis=0)
+    @memoized_property
+    def model_structure(self):
+        return RaggedStructure.from_row_splits(self.batched_structure.row_splits)
 
-        _, row_ends = tf.split(self._row_splits, [1, -1])
-        self._row_lengths = row_ends - self._row_starts
-        self._row_ends = row_ends - 1  # used in model gather
+    @memoized_property
+    def model_times(self):
+        return pl.model_input(self.batched_times)
 
-        self._batch_size = tf.size(self._row_lengths, out_type=tf.int64)
-
-        self._batched = True
-
-    def frame_indices(self, t_starts, t_ends, num_frames: int, dtype=None):
+    def frame_indices(
+        self,
+        t_starts: Optional[IntTensor],
+        t_ends: IntTensor,
+        num_frames: int,
+        dtype: tf.DType = None,
+    ):
         """
         Returns flat batched frame indices in t_start, t_end.
 
-        Assumes t_starts <= t < t_ends
+        Assumes t_starts <= self.batched_times < t_ends
+
+        This is the batched version of
+        ```
+        (t - t_starts) / (t_ends - t_starts) * num_frames
+        ```
+        where `t` is the times of this stream.
 
         Args:
-            t_starts: [batch_size] ints, batched
+            t_starts (optional): [batch_size] ints, batched
             t_ends: [batch_size] ints, batched
+            num_frames: number of frames.
 
         Returns:
-            frame_indices: [batched_sized] ints.
+            frame_indices: [batched_sized] ints in [0, num_frames).
         """
         if dtype is None:
             dtype = self.dtype
@@ -376,179 +316,22 @@ class Stream:
         t_ends.shape.assert_has_rank(1)
 
         t = self.batched_times
-        t_ends = tf.gather(t_ends, self.value_rowids)
-        if t_starts is not None:
-            t_starts = tf.gather(t_starts, self.value_rowids)
-            t = t - t_starts
-            t_ends = t_ends - t_starts
 
-        t = num_frames * t / t_ends
+        value_rowids = self.batched_structure.value_rowids
+        if t_starts is not None:
+            t_ends = t_ends - t_starts
+            t = t - tf.gather(t_starts, value_rowids)
+        t = t / tf.gather(t_ends, value_rowids)
+        t = num_frames * t
         t = tf.cast(t, dtype)
         return t
-
-    def batch_features(self, features):
-        return ragged.from_row_splits(features, self.model_row_splits)
-
-    def mean_features(self, features, batch_size):
-        return tf.math.unsorted_segment_mean(
-            features, self.model_value_rowids, num_segments=batch_size
-        )
-
-    @property
-    def batched_times(self):
-        self._batch()
-        return self._batched_times
-
-    @property
-    def value_rowids(self):
-        self._batch()
-        return self._value_rowids
-
-    @property
-    def row_splits(self) -> IntTensor:
-        self._batch()
-        return self._row_splits
-
-    @property
-    def row_lengths(self) -> IntTensor:
-        self._batch()
-        return self._row_lengths
-
-    @property
-    def row_starts(self) -> IntTensor:
-        self._batch()
-        return self._row_starts
-
-    @property
-    def batch_size(self) -> IntTensor:
-        self._batch()
-        return self._batch_size
-
-    @property
-    def batched_size(self) -> IntTensor:
-        self._batch()
-        return self._batched_size
-
-    @property
-    def padding(self) -> IntTensor:
-        self._batch()
-        return self._padding
-
-    @property
-    def valid_size(self) -> IntTensor:
-        return self._valid_size
-
-    @property
-    def model_valid_size(self) -> IntTensor:
-        if self._model_valid_size is not None:
-            valid_size = tf.expand_dims(self.valid_size, axis=0)
-            valid_size = pl.model_input(valid_size)
-            self._model_valid_size = tf.squeeze(valid_size)
-        return self._model_valid_size
-
-    def prepare_model_inputs(self, features) -> tf.RaggedTensor:
-        features = pl.batch(pl.cache(features))
-        if self.padding is not None:
-            features = pad_ragged(features, self.padding)
-        features = pl.model_input(features)
-        return features
-
-    # def prepare_final_labels(self, labels) -> tf.Tensor:
-    #     return pl.batch(labels)
-
-    # def prepare_final_weights(self, weights):
-    #     return pl.batch(weights)
-
-    # def prepare_labels(self, labels) -> Dict[str, tf.Tensor]:
-    #     labels = self.prepare_final_labels(labels)
-    #     ret = {"final": labels}
-    #     row_lengths = self.row_lengths
-    #     labels = tf.repeat(labels, row_lengths, axis=0)
-    #     # if self._min_mean_size is not None:
-    #     if self.padding is not None:
-    #         labels = tf.pad(labels, [[0, self.padding]])
-    #     ret["stream"] = labels
-    #     return ret
-
-    # def prepare_weights(self, weights=None) -> Dict[str, tf.Tensor]:
-    #     ret = {}
-    #     if weights is None:
-    #         weights = 1
-    #     else:
-    #         weights = self.prepare_final_weights(weights)
-    #         ret["final"] = weights
-
-    #     row_lengths = self.row_lengths
-    #     weights = weights / (self.batch_size * row_lengths)
-    #     weights = tf.repeat(weights, row_lengths, axis=0)
-    #     # if self._min_mean_size is not None:
-    #     if self.padding is not None:
-    #         weights = tf.pad(weights, [[0, self.padding]])
-    #     ret["stream"] = weights
-    #     return ret
-
-    def final_features(self, features):
-        return Lambda(_final_features)(
-            [features, self.model_row_lengths, self.model_row_splits]
-        )
-
-    @property
-    def model_times(self):
-        if self._model_times is None:
-            self._model_times = pl.model_input(self.batched_times)
-        return self._model_times
-
-    @property
-    def model_row_lengths(self):
-        if self._model_row_lengths is None:
-            splits = self.model_row_splits
-            self._model_row_lengths = splits[1:] - splits[:-1]
-        return self._model_row_lengths
-
-    @property
-    def model_row_starts(self):
-        if self._model_row_starts is None:
-            self._model_row_starts = self.model_row_splits[:-1]
-        return self._model_row_starts
-
-    @property
-    def model_row_splits(self):
-        if self._model_row_splits is None:
-            self._model_row_splits = pl.model_input(self.row_splits)
-        return self._model_row_splits
-
-    @property
-    def model_row_ends(self):
-        if self._model_row_ends is None:
-            # self._model_row_ends = pl.model_input(self._row_ends)
-            self._model_row_ends = self.model_row_splits[1:] - 1
-        return self._model_row_ends
-
-    @property
-    def model_value_rowids(self):
-        if self._model_value_rowids is None:
-            self._model_value_rowids = tf.ragged.row_splits_to_segment_ids(
-                self.model_row_splits
-            )
-        return self._model_value_rowids
 
     @classmethod
     def from_config(cls, config):
         return Stream(**config)
 
     def get_config(self):
-        return dict(times=self.times, min_mean_size=self.min_mean_size)
-
-    def _rebuild(self: T, **kwargs) -> T:
-        config = self.get_config()
-        config.update(kwargs)
-        return self.__class__.from_config(config)
-
-    def mask(self, mask: BoolTensor) -> "Stream":
-        return self._rebuild(times=tf.boolean_mask(self.times, mask))
-
-    def gather(self, indices: IntTensor) -> "Stream":
-        return self._rebuild(times=tf.gather(self.times, indices))
+        return dict(times=self.times)
 
     def pool_features(
         self,
@@ -560,7 +343,7 @@ class Stream:
         **kwargs
     ):
         batch_size = tf.size(t_end)
-        value_rowids = self.model_value_rowids
+        value_rowids = self.model_structure.value_rowids
         t_end = tf.gather(t_end, value_rowids)
         dt = tf.cast(num_decays * (t_end - self.model_times), tf.float32) / tf.cast(
             t_end, tf.float32
@@ -576,8 +359,6 @@ class SpatialStream(Stream):
         grid: Union[Grid, IntTensor, IntArray, Tuple[int, ...]],
         times: IntTensor,
         coords: IntTensor,
-        bucket_sizes: bool = False,
-        min_mean_size: Optional[int] = None,
         dtype: tf.DType = DTYPE,
     ):
         assert times.shape.ndims == 1
@@ -594,15 +375,7 @@ class SpatialStream(Stream):
         else:
             raise ValueError("coords must be rank 1 or 2, got {}".format(coords.shape))
 
-        self._batched_coords = None
-        self._model_coords = None
-
-        super().__init__(
-            times=times,
-            bucket_sizes=bucket_sizes,
-            min_mean_size=min_mean_size,
-            dtype=dtype,
-        )
+        super().__init__(times=times, dtype=dtype)
 
     @classmethod
     def from_config(cls, config):
@@ -616,22 +389,15 @@ class SpatialStream(Stream):
     def coords(self) -> IntTensor:
         return self._coords
 
-    @property
+    @memoized_property
     def batched_coords(self):
-        if self._batched_coords is None:
-            coords = pl.cache(self._coords)
-            coords = pl.batch(coords)
-            self._batched_coords = ragged.flat_values(coords)
-            padding = self.padding
-            if padding is not None:
-                self._batched_coords = tf.pad(self._batched_coords, [[0, padding]])
-        return self._batched_coords
+        coords = pl.cache(self._coords)
+        coords = pl.batch(coords)
+        return ragged_wrappers.flat_values(coords)
 
-    @property
+    @memoized_property
     def model_coords(self):
-        if self._model_coords is None:
-            self._model_coords = pl.model_input(self.batched_coords)
-        return self._model_coords
+        return pl.model_input(self.batched_coords)
 
     def pool_features(
         self,
@@ -659,14 +425,21 @@ class SpatialStream(Stream):
     ):
         static_shape = self.grid.static_shape
         assert static_shape is not None
-        static_size = np.prod(static_shape)
+        static_size = np.prod(static_shape, dtype=np.int64)
         assert features.shape[-1] is not None
         num_frames = np.array(num_frames, dtype=np.int64)
 
-        batch_index = self.value_rowids
+        batch_index = self.batched_structure.value_rowids
         batched_coords = maybe_cast(self.batched_coords, batch_index.dtype)
         time = self.frame_indices(t_start, t_end, num_frames, dtype=batch_index.dtype)
-        dims = tf.stack((self.batch_size, num_frames, static_size), axis=0)
+        dims = tf.stack(
+            (
+                maybe_cast(self.batched_structure.nrows, tf.int64),
+                num_frames,
+                static_size,
+            ),
+            axis=0,
+        )
         indices = tf.stack((batch_index, time, batched_coords), axis=0)
         indices = grid_layers.ravel_multi_index(indices, dims, axis=0)
 
@@ -674,13 +447,9 @@ class SpatialStream(Stream):
         if batch_size is None:
             features.shape.assert_has_rank(3)
             batch_size = tf.shape(features)[0]
-            assert ragged.is_ragged(features)
-            features = ragged.values(features)
+            assert is_ragged(features)
+            features = ragged_wrappers.values(features)
         features.shape.assert_has_rank(2)
-        if self.padding is not None:
-            valid_size = self.model_valid_size
-            features = features[:valid_size]
-            indices = indices[:valid_size]
         features = reduction(
             features,
             indices,
@@ -724,18 +493,6 @@ class SpatialStream(Stream):
         config.update(dict(coords=self.coords, grid=self.grid))
         return config
 
-    def mask(self, mask: BoolTensor) -> "SpatialStream":
-        return self._rebuild(
-            times=tf.boolean_mask(self.times, mask),
-            coords=tf.boolean_mask(self.coords, mask),
-        )
-
-    def gather(self, indices: IntTensor) -> "SpatialStream":
-        return self._rebuild(
-            times=tf.gather(self.times, indices),
-            coords=tf.gather(self.coords, indices),
-        )
-
 
 class Convolver(Generic[S0, S1]):
     _publisher = ps.Publisher()
@@ -771,34 +528,11 @@ class Convolver(Generic[S0, S1]):
         self._num_partitions = num_partitions
 
         self._batched_dts = None
-        self._model_dts = None
         Convolver._publisher.add(self)
 
     @property
     def dtype(self):
         return self._dtype
-
-    def _rebuild(self, **kwargs) -> "Convolver":
-        params = dict(
-            num_partitions=self._num_partitions,
-            in_stream=self.in_stream,
-            out_stream=self.out_stream,
-            partitions=self.partitions,
-            indices=self.indices,
-            splits=self.splits,
-            decay_time=self.decay_time,
-        )
-        params.update(kwargs)
-        return Convolver(**params)
-
-    def reindex(self, indices: IntTensor) -> "Convolver":
-        return self._rebuild(indices=tf.gather(indices, self.indices))
-
-    def gather(self, indices: IntTensor) -> "Convolver":
-        values = tf_stack((self._partitions, self._indices), axis=-1)
-        values, splits = ragged_layers.gather_rows(values, self._splits, indices)
-        partitions, indices = tf.unstack(values, axis=-1)
-        return self._rebuild(partitions=partitions, indices=indices, splits=splits)
 
     @property
     def partitions(self) -> IntTensor:
@@ -829,20 +563,11 @@ class Convolver(Generic[S0, S1]):
     def num_partitions(self):
         return self._num_partitions
 
-    @property
-    def batched(self):
-        return self._batched_dts is not None
-
-    @property
-    def batched_dts(self):
-        if not self.batched:
-            if self.num_partitions == 1:
-                self._batched_dts = (
-                    self._batch_single_partition(self._indices, self._splits),
-                )
-            else:
-                self._batched_dts = self._batch_multi_partition()
-        return self._batched_dts
+    @memoized_property
+    def batched_dts(self) -> Tuple[tf.SparseTensor, ...]:
+        if self.num_partitions == 1:
+            return (self._batch_single_partition(self._indices, self._splits),)
+        return self._batch_multi_partition()
 
     def _batch_single_partition(self, indices, splits) -> tf.SparseTensor:
         in_stream = self._in_stream
@@ -853,35 +578,14 @@ class Convolver(Generic[S0, S1]):
         indices = pl.cache(indices)
         splits = pl.cache(splits)
 
-        # with mg.pre_batch_context():
-        #     i = maybe_cast(tf.ragged.row_splits_to_segment_ids(splits),
-        #                    tf.int64)
-        #     j = maybe_cast(indices, tf.int64)
-        #     ij = tf_stack((i, j), axis=-1)
-        #     values = tf.ones_like(i)
-        #     dt = tf.SparseTensor(ij, values, (-1, -1))
-
-        # dt = mg.batch(dt)
-        # with mg.post_batch_context():
-        #     b, i, j = tf.unstack(dt.indices, num=3, axis=-1)
-        #     i = i + tf.gather(out_stream.row_starts, b)
-        #     j = j + tf.gather(in_stream.row_starts, b)
-        #     values = tf.cast(
-        #         tf.gather(out_stream.batched_times, i) - tf.gather(
-        #             in_stream.batched_times, j), tf.float32) / self.decay_time
-        #     ij = tf_stack((i, j), axis=-1)
-        #     dt = tf.SparseTensor(
-        #         ij, values, (out_stream.batched_size, in_stream.batched_size))
-        # return dt
-
-        ragged_indices = ragged.from_row_splits(
+        ragged_indices = ragged_wrappers.from_row_splits(
             maybe_cast(indices, tf.int64), maybe_cast(splits, tf.int64), validate=False,
         )
 
         ragged_indices = pl.batch(ragged_indices)
 
         b, i, j = sparse_layers.ragged_to_sparse_indices(
-            ragged_indices, in_stream.row_starts
+            ragged_indices, in_stream.batched_structure.row_starts
         )
         del b
         dt = (
@@ -893,49 +597,22 @@ class Convolver(Generic[S0, S1]):
             / self.decay_time
         )
         dense_shape = tf_stack(
-            (out_stream.batched_size, in_stream.batched_size), axis=0
+            (
+                out_stream.batched_structure.total_size,
+                in_stream.batched_structure.total_size,
+            ),
+            axis=0,
         )
         ij = tf_stack((i, j), axis=-1)
         assert ij.dtype == tf.int64
         assert dense_shape.dtype == tf.int64
-        dt = sparse.SparseTensor(ij, dt, dense_shape)
+        dt = sparse_wrappers.SparseTensor(maybe_cast(ij, tf.int64), dt, dense_shape)
         return dt
 
-    def _batch_multi_partition(self):
+    def _batch_multi_partition(self) -> Tuple[tf.SparseTensor, ...]:
         num_partitions = self.num_partitions
 
         assert num_partitions > 1
-        assert not self.batched
-
-        # ##################################
-        # ###### IMPL 0 START. WORKS #######
-        # ##################################
-        # dts = []
-
-        # with mg.pre_cache_context():
-        #     rowids = tf.ragged.row_splits_to_segment_ids(self._splits,
-        #                                                  out_type=self.dtype)
-        #     partitions = maybe_cast(self._partitions, tf.int32)
-        #     ijs = tf.dynamic_partition(
-        #         tf_stack((rowids, self._indices), axis=-1), partitions,
-        #         num_partitions)
-
-        #     # components = []
-        #     for ij in ijs:
-        #         i, j = tf.unstack(ij, num=2, axis=-1)
-        #         indices = tf.RaggedTensor.from_value_rowids(
-        #             j, i, nrows=self.out_stream.size, validate=False)
-        #         dts.append(
-        #             self._batch_single_partition(indices.values,
-        #                                          indices.row_splits))
-        # return tuple(dts)
-        # ##################################
-        # ########## IMPL 0 END ############
-        # ##################################
-
-        ##################################
-        ###### IMPL 1 START. WORKS #######
-        ##################################
 
         components = []
 
@@ -948,19 +625,21 @@ class Convolver(Generic[S0, S1]):
             num_partitions,
         )
 
+        # sorted transpose
         for ij in ijs:
             ij.shape.assert_has_rank(2)
             assert ij.shape[1] == 2
+            # num required in tf-nightly (2.5)
             i, j = tf.unstack(ij, num=2, axis=-1)
-            indices = ragged.from_value_rowids(
+            indices = ragged_wrappers.from_value_rowids(
                 j, i, nrows=maybe_cast(self.out_stream.size, i.dtype), validate=False,
             )
 
-            components.append((ragged.values(indices), ragged.row_splits(indices)))
+            components.append(ragged_components(indices))
 
         all_ragged_indices = [
             pl.batch(
-                ragged.from_row_splits(
+                ragged_wrappers.from_row_splits(
                     tf.cast(pl.cache(v), tf.int64),
                     tf.cast(pl.cache(rs), tf.int64),
                     validate=False,
@@ -979,16 +658,16 @@ class Convolver(Generic[S0, S1]):
         all_j = []
         for ragged_indices in all_ragged_indices:
             b = tf.ragged.row_splits_to_segment_ids(
-                ragged.row_splits(ragged_indices), out_type=self.dtype
+                ragged_wrappers.row_splits(ragged_indices), out_type=self.dtype
             )
-            ragged_indices = ragged.values(ragged_indices)
-            b = tf.repeat(b, ragged.row_lengths(ragged_indices), axis=0)
+            ragged_indices = ragged_wrappers.values(ragged_indices)
+            b = tf.repeat(b, ragged_wrappers.row_lengths(ragged_indices), axis=0)
             # sparse indices must eventually be int64
             i = tf.ragged.row_splits_to_segment_ids(
-                ragged.row_splits(ragged_indices), out_type=tf.int64
+                ragged_wrappers.row_splits(ragged_indices), out_type=tf.int64
             )
-            j = tf.cast(ragged.values(ragged_indices), tf.int64)
-            counts.append(ragged.row_splits(ragged_indices)[-1])
+            j = tf.cast(ragged_wrappers.values(ragged_indices), tf.int64)
+            counts.append(ragged_wrappers.row_splits(ragged_indices)[-1])
             # total = tf.split(ragged_indices.row_splits, [-1, 1])[1]
             # counts.append(tf.squeeze(total, axis=0))
             all_b.append(b)
@@ -1002,7 +681,7 @@ class Convolver(Generic[S0, S1]):
 
         # block diagonalize
         # skip i offset since it was automatically done in ragged batching
-        cat_j = cat_j + tf.gather(in_stream.row_starts, cat_b)
+        cat_j = cat_j + tf.gather(in_stream.batched_structure.row_starts, cat_b)
 
         cat_dt = (
             tf.cast(
@@ -1015,7 +694,11 @@ class Convolver(Generic[S0, S1]):
         cat_ij = tf_stack((cat_i, cat_j), axis=-1)
 
         dense_shape = tf_stack(
-            (out_stream.batched_size, in_stream.batched_size), axis=0
+            (
+                maybe_cast(out_stream.batched_structure.total_size, tf.int64),
+                maybe_cast(in_stream.batched_structure.total_size, tf.int64),
+            ),
+            axis=0,
         )
         # tf.SparseTensor indices and dense_shape must be int64
         if dense_shape.dtype != tf.int64:
@@ -1025,17 +708,13 @@ class Convolver(Generic[S0, S1]):
         ijs = tf.split(cat_ij, counts)
 
         return tuple(
-            sparse.SparseTensor(ij, dt, dense_shape) for ij, dt in zip(ijs, dts)
+            sparse_wrappers.SparseTensor(maybe_cast(ij, tf.int64), dt, dense_shape)
+            for ij, dt in zip(ijs, dts)
         )
-        ##################################
-        ########## IMPL 1 END ############
-        ##################################
 
-    @property
+    @memoized_property
     def model_dts(self):
-        if self._model_dts is None:
-            self._model_dts = tuple(pl.model_input(dt) for dt in self.batched_dts)
-        return self._model_dts
+        return tuple(pl.model_input(dt) for dt in self.batched_dts)
 
     def convolve(
         self,
@@ -1053,15 +732,14 @@ class Convolver(Generic[S0, S1]):
                 temporal_kernel_size=temporal_kernel_size,
                 **kwargs
             )
-        else:
-            return conv_layers.spatio_temporal_event_conv(
-                features=features,
-                dt=self.model_dts,
-                filters=filters,
-                temporal_kernel_size=temporal_kernel_size,
-                spatial_kernel_size=self.num_partitions,
-                **kwargs
-            )
+        return conv_layers.spatio_temporal_event_conv(
+            features=features,
+            dt=self.model_dts,
+            filters=filters,
+            temporal_kernel_size=temporal_kernel_size,
+            spatial_kernel_size=self.num_partitions,
+            **kwargs
+        )
 
 
 def spatial_leaky_integrate_and_fire(
@@ -1070,8 +748,6 @@ def spatial_leaky_integrate_and_fire(
     decay_time: int,
     threshold: float = 1.0,
     reset_potential: float = -1.0,
-    bucket_sizes: bool = False,
-    min_mean_size: Optional[int] = None,
 ) -> SpatialStream:
     assert stream.grid == link.in_grid
     times, coords = lif_layers.spatial_leaky_integrate_and_fire(
@@ -1083,14 +759,7 @@ def spatial_leaky_integrate_and_fire(
         threshold=threshold,
         reset_potential=reset_potential,
     )
-    return SpatialStream(
-        link.out_grid,
-        times,
-        coords,
-        bucket_sizes=bucket_sizes,
-        min_mean_size=min_mean_size,
-        dtype=stream.dtype,
-    )
+    return SpatialStream(link.out_grid, times, coords, dtype=stream.dtype)
 
 
 def leaky_integrate_and_fire(
@@ -1098,8 +767,6 @@ def leaky_integrate_and_fire(
     decay_time: int,
     threshold: float = 1.0,
     reset_potential: float = -1,
-    bucket_sizes: bool = False,
-    min_mean_size: Optional[int] = None,
 ) -> Stream:
     time = lif_layers.leaky_integrate_and_fire(
         stream.times,
@@ -1107,9 +774,7 @@ def leaky_integrate_and_fire(
         threshold=threshold,
         reset_potential=reset_potential,
     )
-    return Stream(
-        time, min_mean_size=min_mean_size, dtype=stream.dtype, bucket_sizes=bucket_sizes
-    )
+    return Stream(time, dtype=stream.dtype)
 
 
 def spatio_temporal_convolver(
@@ -1180,6 +845,25 @@ def flatten_convolver(
     max_decays: int = 4,
     num_partitions: Optional[int] = None,
 ) -> Convolver[SpatialStream, Stream]:
+    """
+    Get a convolver that convolves over all spatial dimensions.
+
+    This is conceptually similar to applying a 3x3 image convolution without padding
+    to a 3x3 image. While the output has no spatial dimension (or is 1x1), it is
+    distinctly different to global pooling.
+
+    Args:
+        in_stream: input spatial stream.
+        out_stream: output temporal stream.
+        decay_time: time-scale influencing speed of exponential decay.
+        max_decays: number of `decay_time` durations before temporal neighborhood is
+            truncated.
+        num_partitions: number of pixels in the input stream. This is computed from
+            `in_stream.grid.static_shape`. If that is not known, a ValueError is raised.
+
+    Returns:
+        A Convolver.
+    """
     assert not isinstance(out_stream, SpatialStream)
 
     if num_partitions is None:
@@ -1188,9 +872,7 @@ def flatten_convolver(
                 "Either input_stream grid must be static or num_partitions must be "
                 "provided"
             )
-        num_partitions_ = np.prod(in_stream.grid.static_shape)
-    else:
-        num_partitions_ = num_partitions
+        num_partitions = np.prod(in_stream.grid.static_shape)
     partitions, indices, splits = neigh_layers.compute_full_neighbors(
         in_times=in_stream.times,
         in_coords=in_stream.coords,
@@ -1198,7 +880,7 @@ def flatten_convolver(
         event_duration=decay_time * max_decays,
     )
     return Convolver[SpatialStream, Stream](
-        num_partitions=num_partitions_,
+        num_partitions=num_partitions,
         in_stream=in_stream,
         out_stream=out_stream,
         partitions=partitions,
@@ -1211,6 +893,19 @@ def flatten_convolver(
 def temporal_convolver(
     in_stream: Stream, out_stream: Stream, decay_time: int, max_decays: int = 4
 ) -> Convolver[Stream, Stream]:
+    """
+    Get a convolver between two temporal streams.
+
+    Args:
+        in_stream: input stream.
+        out_stream: output stream.
+        decay_time: time-scale influencing speed of exponential decay.
+        max_decays: number of `decay_time` durations before temporal neighborhood is
+            truncated.
+
+    Returns:
+        A temporal Convolver.
+    """
     indices, splits = neigh_layers.compute_pooled_neighbors(
         in_stream.times, out_stream.times, event_duration=max_decays * decay_time
     )
@@ -1226,8 +921,39 @@ def temporal_convolver(
 
 
 def stream_accumulator():
+    """
+    Context manager that accumulates streams as they are created.
+
+    This is mostly useful for debugging. See `ecn/vis.py` for example usage.
+
+    Example usage:
+    ```python
+
+    with stream_accumulator() as streams:
+        input_stream = Stream(...)
+        output_stream = leaky_integrate_and_fire(stream, ...)
+    assert streams == [input_stream, output_stream]
+
+    Returns:
+        A context manager that yields a list which is appended to as `Stream`s are
+        created.
+    ```
+
+    See also: `convolver_accumulator`.
+    """
     return ps.accumulator(Stream.on_create)
 
 
 def convolver_accumulator():
+    """
+    Context manager that accumulates convolvers as they are created.
+
+    This is mostly useful for debugging. See `ecn/vis.py` for example usage.
+
+    Returns:
+        A context manager that yields a list which is appended to as `Convolver`s are
+        created.
+
+    See also: `stream_accumulator`.
+    """
     return ps.accumulator(Convolver.on_create)

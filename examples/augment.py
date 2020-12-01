@@ -8,18 +8,20 @@ from events_tfds.events import asl_dvs
 
 reverse_xy = False
 
-# base_source = sources.nmnist_source()
+# name = "nmnist"
 # aug_kwargs = dict(flip_time=0.5)
 
-# base_source = sources.cifar10_dvs_source()
+# name = "cifar10_dvs"
 # aug_kwargs = dict(flip_time=0.5, flip_ud=True)
 # reverse_xy = True
 
-# base_source = sources.ncaltech101_source()
+# name = "ncaltech101"
 # aug_kwargs = dict(flip_time=0.5, flip_lr=True)
 
-dataset = tfds.load("asl_dvs", split="train", as_supervised=True)
+name = "asl_dvs"
 aug_kwargs = dict(grid_shape=asl_dvs.GRID_SHAPE, flip_ud=True, flip_time=0.5)
+
+dataset = tfds.load(name, split="train", as_supervised=True)
 
 for example in dataset.map(functools.partial(augment_event_dataset, **aug_kwargs)):
     vis.vis_example2d(example, num_frames=16, fps=4, reverse_xy=reverse_xy)
