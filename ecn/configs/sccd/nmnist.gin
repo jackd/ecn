@@ -6,7 +6,7 @@ include '$ECN_CONFIG/data/aug/online.gin'
 include '$ECN_CONFIG/misc/rlrp.gin'
 
 batch_size = 32
-epochs = 500
+epochs = 150
 shuffle_buffer = 1024
 
 inception_vox_pooling.num_levels = 3

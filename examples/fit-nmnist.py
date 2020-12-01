@@ -7,6 +7,7 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 
 import shape_tfds.shape.modelnet  # pylint: disable=unused-import
+from ecn.builders.vox_pool import inception_vox_pooling
 from ecn.ops.augment import augment_event_dataset
 from events_tfds.events import nmnist
 from kblocks.data import dense_to_ragged_batch
@@ -88,7 +89,7 @@ model_callbacks = [
 
 trainable = build_meta_model_trainable(
     meta_model_func=functools.partial(
-        vox_pool,
+        inception_vox_pooling,
         grid_shape=nmnist.GRID_SHAPE,
         num_classes=nmnist.NUM_CLASSES,
         num_levels=3,

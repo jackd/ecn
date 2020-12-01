@@ -15,7 +15,7 @@ Lambda = tf.keras.layers.Lambda
 def inception_vox_pooling(
     features,
     labels,
-    weights=None,
+    sample_weight=None,
     num_classes: int = 10,
     grid_shape: Tuple[int, int] = (128, 128),
     decay_time: int = 2000,
@@ -35,6 +35,62 @@ def inception_vox_pooling(
     initial_pooling=None,
     max_events=None,
 ):
+    """
+    `meta_model.pipeline` build function that performs event-stream classification.
+
+    Loosely inspired by inception, it has blocks that have 3x3 convolutions, a `t`
+    convolution (kernel-mask [[0, 1, 0], [1, 1, 1], [0, 1, 0]]), temporally-deep
+    1x1 convolutions and feature-deep event-wise convolutions.
+
+    Most output streams are voxelized in xyt space which form a separate branch of
+    the network as per the diagram below.
+
+
+    Stream0 -> Stream1 -> Stream2 -> Stream3
+                  |          |          |
+                  v          v          v
+                Vox1   ->  Vox2   ->  Vox3
+                                        |
+                                        v
+                                       MLP
+                                        |
+                                        v
+                                      logits
+
+    The above network has num_levels=3, vox_start=1.
+
+    Args:
+        features: Dict of KerasTensor with pre-cached "time", "coords", "polarity" keys.
+        labels: Int KerasTensor with pre-cached class labels.
+        sample_weight: Possible KerasTensor with pre-cached example weights.
+        num_classes: number of classes for classification problem.
+        grid_shape: spatial shape of input grid.
+        decay_time: time-scale for initial convolutions.
+        spatial_buffer: buffer size used in neighborhood preprocessing. Each pixel will
+            store up to this many input events when computing neighbors.
+        reset_potential: used in leaky integrate and fire for stream subsampling.
+        threshold: used in leaky integrate and fire for stream subsampling.
+        filters0: base number of filters in first block.
+        kt0: base temporal kernal size in first block.
+        hidden_units: units in hidden layers of final MLP.
+        dropout_rate: rate used in Dropout layers.
+        decay_time_expansion_rate: factory by which `decay_time` is expanded each block.
+        num_levels: number of blocks of convolutions.
+        activation: activation function / string ID for activations used throughout.
+        recenter: if True, streams are initially shifted to the image center.
+        vox_reduction: string indicating the mechanism by which events are accumulated
+            across x-y-t voxels.
+        vox_start: the level at which voxelization begins.
+        initial_pooling: spatial pooling applied before any learning begins.
+        max_events: maximum number of input events before truncation.
+
+    Returns:
+        (logits, labels) or (logits, labels, sample_weight) for trained model.
+
+    See also:
+      - `meta_models.pipeline.build_pipelined_model`
+      - `kblocks.trainables.build_meta_model_trainable`
+    """
     if vox_reduction == "max":
         reduction = tf.math.unsorted_segment_max
     else:
@@ -205,7 +261,7 @@ def inception_vox_pooling(
     logits = layers.Dense(num_classes, activation=None, name="logits")(features)
 
     labels = pl.batch(pl.cache(labels))
-    if weights is None:
+    if sample_weight is None:
         return logits, labels
-    weights = pl.batch(pl.cache(weights))
-    return logits, labels, weights
+    sample_weight = pl.batch(pl.cache(sample_weight))
+    return logits, labels, sample_weight
