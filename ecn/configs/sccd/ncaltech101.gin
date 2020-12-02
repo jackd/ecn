@@ -19,4 +19,4 @@ inception_vox_pooling.max_events = 300000
 
 inception_vox_pooling.filters0 = 16
 
-variant_id = 'sccd'
+family_id = 'sccd'

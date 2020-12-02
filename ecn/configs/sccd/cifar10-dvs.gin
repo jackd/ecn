@@ -15,4 +15,4 @@ inception_vox_pooling.reset_potential = -3.0
 inception_vox_pooling.threshold = 1.6
 inception_vox_pooling.decay_time = 4000
 
-variant_id = 'sccd'
+family_id = 'sccd'

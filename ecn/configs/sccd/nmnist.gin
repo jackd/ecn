@@ -13,4 +13,4 @@ inception_vox_pooling.num_levels = 3
 inception_vox_pooling.vox_start = 0
 inception_vox_pooling.filters0 = 32
 
-variant_id = 'sccd'
+family_id = 'sccd'

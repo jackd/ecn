@@ -1,13 +1,11 @@
-msg = "tensorflow>=2.0 required, but {} found"
+msg = "tensorflow>=2.3 required, but {} found"
 try:
     import tensorflow as tf
 
-    v = tf.version.VERSION
-    major, minor, patch = v.split(".")
-    if int(major) < 2:
-        raise ImportError(msg.format(v))
-except ImportError:
-    raise ImportError(msg.format("no tf installation found"))
+    if tf.version.VERSION < "2.3":
+        raise ImportError(msg.format(tf.version.VERSION))
+except ImportError as e:
+    raise ImportError(msg.format("no installation")) from e
 
 # clean up namespace
 del msg

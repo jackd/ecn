@@ -192,7 +192,6 @@ class GridNeighbors:
                 self.splits,
                 self.partitions,
                 nrows_out=maybe_cast(self._out_grid.size, self.indices.dtype),
-                validate=False,
             )
             self._transpose = GridNeighbors(
                 self._out_grid,
@@ -581,9 +580,7 @@ class Convolver(Generic[S0, S1]):
         splits = pl.cache(splits)
 
         ragged_indices = ragged_wrappers.from_row_splits(
-            maybe_cast(indices, tf.int64),
-            maybe_cast(splits, tf.int64),
-            validate=False,
+            maybe_cast(indices, tf.int64), maybe_cast(splits, tf.int64)
         )
 
         ragged_indices = pl.batch(ragged_indices)
@@ -636,10 +633,7 @@ class Convolver(Generic[S0, S1]):
             # num required in tf-nightly (2.5)
             i, j = tf.unstack(ij, num=2, axis=-1)
             indices = ragged_wrappers.from_value_rowids(
-                j,
-                i,
-                nrows=maybe_cast(self.out_stream.size, i.dtype),
-                validate=False,
+                j, i, nrows=maybe_cast(self.out_stream.size, i.dtype)
             )
 
             components.append(ragged_components(indices))
@@ -647,9 +641,7 @@ class Convolver(Generic[S0, S1]):
         all_ragged_indices = [
             pl.batch(
                 ragged_wrappers.from_row_splits(
-                    tf.cast(pl.cache(v), tf.int64),
-                    tf.cast(pl.cache(rs), tf.int64),
-                    validate=False,
+                    tf.cast(pl.cache(v), tf.int64), tf.cast(pl.cache(rs), tf.int64)
                 )
             )
             for v, rs in components

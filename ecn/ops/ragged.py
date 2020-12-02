@@ -20,7 +20,7 @@ def transpose_csr(
     splits: IntTensor,
     values: tf.Tensor,
     nrows_out: Optional[IntTensor] = None,
-    validate=True,
+    validate: bool = True,
 ) -> Tuple[IntTensor, IntTensor, tf.Tensor]:
     indices = tf.convert_to_tensor(indices, dtype_hint=tf.int64)
     splits = tf.convert_to_tensor(splits, dtype_hint=tf.int64)
@@ -37,15 +37,17 @@ def transpose_csr(
 
 
 def mask_rows(
-    values: tf.Tensor, row_splits: IntTensor, mask: BoolTensor
+    values: tf.Tensor, row_splits: IntTensor, mask: BoolTensor, validate: bool = True
 ) -> Tuple[tf.Tensor, IntTensor]:
-    rt = tf.RaggedTensor.from_row_splits(values, row_splits, validate=False)
-    mask = tf.RaggedTensor.from_row_splits(mask, row_splits, validate=False)
+    rt = tf.RaggedTensor.from_row_splits(values, row_splits, validate=validate)
+    mask = tf.RaggedTensor.from_row_splits(mask, row_splits, validate=validate)
     rt = tf.ragged.boolean_mask(rt, mask)
     return rt.values, rt.row_splits
 
 
-def gather_rows(values: tf.Tensor, row_splits: IntTensor, indices: IntTensor):
-    rt = tf.RaggedTensor.from_row_splits(values, row_splits, validate=False)
+def gather_rows(
+    values: tf.Tensor, row_splits: IntTensor, indices: IntTensor, validate: bool = True
+):
+    rt = tf.RaggedTensor.from_row_splits(values, row_splits, validate=validate)
     rt = tf.gather(rt, indices)
     return rt.values, rt.row_splits
