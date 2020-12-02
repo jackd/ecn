@@ -1,9 +1,11 @@
 # [Event-stream Convolutional Network](https://github.com/jackd/ecn)
 
-[tensorflow](https://github.com/tensorflow/tensorflow) implementation of event stream networks from _Sparse Convolutions on Continuous Domains_
+[tensorflow](https://github.com/tensorflow/tensorflow) implementation of event stream networks from _Sparse Convolutions on Continuous Domains_, ACCV2020.
 
 - [ACCV 2020 Paper](paper)
 - [sccd repository](https://github.com/jackd/sccd)
+- [Spotlight Video](https://youtu.be/OihcDbfT1ks) (1min)
+- [Oral Presentation](https://youtu.be/26GDhWfU280) (9min)
 
 ```tex
 @InProceedings{Jack_2020_ACCV,
@@ -22,7 +24,9 @@
 ```bash
 pip install tensorflow  # or tf-nightly - must be >=2.3
 git clone https://github.com/jackd/ecn.git
-pip install -e ecn
+cd ecn
+pip install -r requirements.txt
+pip install -e .
 ```
 
 ### Train NMNIST Model
