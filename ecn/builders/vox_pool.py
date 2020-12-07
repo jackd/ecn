@@ -4,6 +4,7 @@ import gin
 import meta_model.pipeline as pl
 import numpy as np
 import tensorflow as tf
+from kblocks.extras.layers import Dropout
 from kblocks.keras import layers
 
 from ecn import components as comp
@@ -151,7 +152,7 @@ def inception_vox_pooling(
         features, filters=filters, temporal_kernel_size=kt0, activation=activation
     )
     features = layers.BatchNormalization()(features)
-    features = layers.Dropout(dropout_rate)(features)
+    features = Dropout(dropout_rate)(features)
 
     in_stream = out_stream
     del out_stream
@@ -243,7 +244,7 @@ def inception_vox_pooling(
             features, filters=filters, temporal_kernel_size=kt0, activation=activation
         )
         features = layers.BatchNormalization()(features)
-        features = layers.Dropout(dropout_rate)(features)
+        features = Dropout(dropout_rate)(features)
         in_stream = out_stream
         del out_stream
         decay_time = int(decay_time * decay_time_expansion_rate)
@@ -258,12 +259,12 @@ def inception_vox_pooling(
     image_features = layers.Dense(2 * filters)(image_features)
     features = tf.keras.layers.GlobalMaxPooling2D()(image_features)
     features = layers.BatchNormalization()(features)
-    features = layers.Dropout(dropout_rate)(features)
+    features = Dropout(dropout_rate)(features)
 
     for h in hidden_units:
         features = layers.Dense(h, activation=activation)(features)
         features = layers.BatchNormalization()(features)
-        features = layers.Dropout(dropout_rate)(features)
+        features = Dropout(dropout_rate)(features)
     logits = layers.Dense(num_classes, activation=None, name="logits")(features)
 
     labels = pl.batch(pl.cache(labels))

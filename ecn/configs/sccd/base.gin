@@ -15,8 +15,8 @@ batcher = @kb.data.dense_to_ragged_batch()
 kb.data.dense_to_ragged_batch.batch_size = %batch_size
 
 run = 0
-global_seed = %run
-global_generator_seed = 0  # allows reuse of cache files
+global_seed = %run # affects weight initialization
+global_generator_seed = %global_seed  # affects dropout
 data_seed = 0
 
 root_dir = @kb.path.expand()

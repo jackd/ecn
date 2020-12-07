@@ -90,6 +90,13 @@ We provide 4 cache implementations in `kblocks.data`:
 | `save_load_cache`      | `tf.data.experimental.[save,load]`       | Eager      | [x]                  | [x]                  |
 | `tfrecords_cache`      | `kblocks.data.tfrecords.tfrecords_cache` | Eager      | [x]                  | []                   |
 
+## Reproducibility
+
+Effort has been made to make training fully deterministic (i.e. produce identical floating point vlaues). Two outstanding issues remain:
+
+- _non-deterministic ops_: nvidia's [determinism repository](https://github.com/NVIDIA/framework-determinism) lists certain operations as non-deterministic. These include the sparse-dense matrix multiplications included in the cloud convolution operations. This will hopefully be address in tensorflow soon.
+- _uncheckpointable cached datasets_: training uses the default `track_iterator=False` in `kblocks.models.fit`, meaning training over separate calls (e.g. because of pre-emption) will not save or restore training dataset iterator state. This may work with some `cache` implementations. This should not affect results for models trained in a single session.
+
 ## Known Issues
 
 - `pytest ecn` sometimes results in a test failure in `ecn/ops/conv_test.py:test_csr_gradient`. This does not occur with `python ecn/ops/conv_test.py`.

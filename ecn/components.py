@@ -66,6 +66,20 @@ def tf_stack(values, axis=0, name=None):
 
 
 class Grid:
+    """
+    A regular ND grid used for linking to other ND grids.
+
+    I
+
+    These are essential parts of GridNeighbors (links between grids) which determine
+    which pixels of an input grid influence pixels of an output grid. For example,
+    an unpadded 5x5 input grid with a spatial kernel size of 3x3 will have an output
+    grid of shape 3x3. Output pixel (i, j) will be neighbors with input pixels
+    (i:i+3, j:j+3). GridNeighbors themselves use ravelled indices (indices into the
+    flattened array), i.e. pixel (1, 0) in the input grid would have a GridNeighbors
+    index of 5.
+    """
+
     def __init__(self, shape, dtype=DTYPE):
         self._dtype = dtype
         self._static_shape = tf.get_static_value(shape)
@@ -233,11 +247,7 @@ class Stream:
     _publisher = ps.Publisher()
     on_create: ps.Topic = _publisher.topic
 
-    def __init__(
-        self,
-        times: IntTensor,
-        dtype=DTYPE,
-    ):
+    def __init__(self, times: IntTensor, dtype=DTYPE):
         self._dtype = dtype
         self._times = tf.cast(times, dtype)
         self._batched_structure = None
