@@ -69,8 +69,6 @@ class Grid:
     """
     A regular ND grid used for linking to other ND grids.
 
-    I
-
     These are essential parts of GridNeighbors (links between grids) which determine
     which pixels of an input grid influence pixels of an output grid. For example,
     an unpadded 5x5 input grid with a spatial kernel size of 3x3 will have an output
