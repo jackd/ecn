@@ -1,7 +1,7 @@
 absl-py
 tensorflow_datasets
 meta-model@ git+git://github.com/jackd/meta-model.git
-events-tfds@ git+git://github.com/jackd/events-tfds.git
+events-tfds@ git+git://github.com/jackd/events-tfds.git@v0.1
 numba-stream@ git+git://github.com/jackd/numba-stream.git
 wtftf@ git+git://github.com/jackd/wtftf.git
 kblocks@ git+git://github.com/jackd/kblocks.git
